@@ -614,18 +614,21 @@ def create_table(year, gp, session_type, selected_list):
             ls2_txt, ls2_c, _ = sec_format(last_s2, best_s2, overall_best_s2)
             ls3_txt, ls3_c, _ = sec_format(last_s3, best_s3, overall_best_s3)
 
-            # Mini-sector bars colored by last-lap performance
+            # Mini-sector bars: 8 barras por sector (24 total), separadas por sector
             sc1 = seg_color(last_s1, best_s1, overall_best_s1)
             sc2 = seg_color(last_s2, best_s2, overall_best_s2)
             sc3 = seg_color(last_s3, best_s3, overall_best_s3)
-            mini_sectors = html.Div(style={"display": "flex", "gap": "2px", "height": "16px", "alignItems": "center", "justifyContent": "center"}, children=[
-                html.Div(style={"width": "3px", "height": "16px", "backgroundColor": sc1}),
-                html.Div(style={"width": "3px", "height": "16px", "backgroundColor": sc1}),
-                html.Div(style={"width": "3px", "height": "16px", "backgroundColor": sc2}),
-                html.Div(style={"width": "3px", "height": "16px", "backgroundColor": sc2}),
-                html.Div(style={"width": "3px", "height": "16px", "backgroundColor": sc3}),
-                html.Div(style={"width": "3px", "height": "16px", "backgroundColor": sc3}),
-            ])
+            _gap = html.Div(style={"width": "3px", "height": "16px", "backgroundColor": "transparent", "flexShrink": "0"})
+            mini_sectors = html.Div(
+                style={"display": "flex", "gap": "1px", "height": "16px", "alignItems": "center", "justifyContent": "center", "flexWrap": "nowrap"},
+                children=(
+                    [html.Div(style={"width": "3px", "height": "16px", "backgroundColor": sc1, "flexShrink": "0"}) for _ in range(8)]
+                    + [_gap]
+                    + [html.Div(style={"width": "3px", "height": "16px", "backgroundColor": sc2, "flexShrink": "0"}) for _ in range(8)]
+                    + [_gap]
+                    + [html.Div(style={"width": "3px", "height": "16px", "backgroundColor": sc3, "flexShrink": "0"}) for _ in range(8)]
+                )
+            )
 
             interval = str(row.get("Time", "")).split()[0] if not pd.isna(row.get("Time")) else ""
             if interval and not interval.startswith("+") and interval != "Interval": interval = "+" + interval
@@ -915,9 +918,14 @@ def create_live_table(selected_list):
             if is_ob: style["backgroundColor"] = "rgba(177,93,255,0.15)"
             ls_cells.append(html.Td(sval, style=style))
 
-        # Microsectores reales (todos los segmentos del feed)
+        # Microsectores reales (todos los segmentos del feed), separados por sector
         mini_bars = []
         for si in range(3):
+            if si > 0:
+                mini_bars.append(html.Div(style={
+                    "width": "3px", "height": "16px",
+                    "backgroundColor": "transparent", "flexShrink": "0"
+                }))
             segs = sectors.get(si, {}).get("segments", {})
             if segs:
                 for seg_idx in sorted(segs.keys()):
@@ -928,8 +936,8 @@ def create_live_table(selected_list):
                         "backgroundColor": color, "flexShrink": "0"
                     }))
             else:
-                # Sin datos aún — 2 barras grises por sector
-                for _ in range(2):
+                # Sin datos aún — 8 barras grises por sector
+                for _ in range(8):
                     mini_bars.append(html.Div(style={
                         "width": "3px", "height": "16px",
                         "backgroundColor": "#374151", "flexShrink": "0"
@@ -1022,65 +1030,79 @@ def create_live_table(selected_list):
 def update_live(selected_list, n_intervals, sess_old, active_tab):
     if not active_tab or active_tab != "live":
         raise dash.exceptions.PreventUpdate
-    # ── Si el feed live está activo, úsalo directamente ──────────────────────
-    if live_timing.is_fresh(max_age=30):
-        state      = live_timing.get_state()
-        stype      = state.get("session_status", "Live")
-        drv_sample = next(iter(state["driver_list"].values()), {}) if state["driver_list"] else {}
-        title      = f"Live Timing · Sprint Qualifying"
-        flag_src   = f"https://flagcdn.com/us.svg"   # se actualiza abajo si hay sesión
-        # Intentar obtener nombre de sesión del store anterior
-        if sess_old:
-            gp_name  = sess_old.get("gp", "")
-            flag_src = f"https://flagcdn.com/{sess_old.get('flag','us')}.svg"
-            title    = f"{gp_name} · Live Timing {pd.Timestamp.now().year}" if gp_name else title
 
+    # ── PRIORIDAD 1: feed live activo ────────────────────────────────────────
+    if live_timing.is_fresh(max_age=30):
+        gp_name  = (sess_old or {}).get("gp", "Live")
+        flag_src = f"https://flagcdn.com/{(sess_old or {}).get('flag','us')}.svg"
+        title    = f"{gp_name} · Live Timing {pd.Timestamp.now().year}"
         return (
             create_live_table(selected_list),
-            html.Div(),   # mapa desactivado en live para no bloquear
-            sess_old or {"year": 2026, "gp": "Live", "type": "Sprint Qualifying"},
+            html.Div(),
+            sess_old or {"year": pd.Timestamp.now().year, "gp": "Live", "type": "Live"},
             title,
             flag_src
         )
 
-    # ── Fallback: FastF1 histórico ────────────────────────────────────────────
-    sessions = get_latest_session()
-    if not sessions or sessions[0].get("year", 0) < pd.Timestamp.now().year:
-        sessions = get_ff1_latest_session()
+    # ── PRIORIDAD 2: si el feed existe pero aún sin datos, mostrar "conectando" ──
+    live_file_size = 0
+    try:
+        live_file_size = os.path.getsize(
+            os.path.join(os.path.dirname(__file__), "_live_feed.txt")
+        )
+    except Exception:
+        pass
 
-    if not sessions:
-        return (html.Div("Sin conexión. Verificá tu internet.",
-                         style={"color": MUTED, "padding": "60px", "textAlign": "center"}),
-                html.Div(), sess_old, "Offline", "")
+    # Si la sesión es del año actual y el feed existe (aunque vacío), mostrar conectando
+    # en lugar de caer a FastF1 (que puede tardar o no tener datos)
+    now_year = pd.Timestamp.now().year
 
-    sess      = sessions[-1]
-    year      = sess.get("year", 2026)
-    gp        = (sess.get("meeting_name") or sess.get("location") or sess.get("country_name") or "Unknown GP")
-    stype     = sess.get("session_name", "Race")
-    title     = f"{gp} · {stype} {year}"
-    flag_code = sess.get("country_code", "un")
+    # Detectar sesión actual solo si no la tenemos en cache (para no saturar la API)
+    sess_info = sess_old
+    if not sess_info or sess_info.get("year", 0) != now_year:
+        # Solo detectar sesión si no lo hicimos recientemente
+        try:
+            sessions = get_ff1_latest_session()
+            if sessions:
+                s = sessions[0]
+                sess_info = {
+                    "year":  s.get("_ff1_year", now_year),
+                    "gp":    s.get("meeting_name", ""),
+                    "type":  s.get("session_name", ""),
+                    "flag":  s.get("country_code", "us"),
+                }
+        except Exception:
+            pass
+
+    year      = (sess_info or {}).get("year", now_year)
+    gp        = (sess_info or {}).get("gp", "")
+    stype     = (sess_info or {}).get("type", "")
+    flag_code = (sess_info or {}).get("flag", "us")
+    title     = f"{gp} · {stype} {year}" if gp else f"Live Timing {year}"
     flag_src  = f"https://flagcdn.com/{flag_code}.svg"
 
-    # Verificar si ya está en caché antes de intentar renderizar
+    # ── PRIORIDAD 3: datos históricos en caché ───────────────────────────────
     cache_key = f"{year}-{gp}-{stype}-False"
     if cache_key in _session_mem:
-        table = create_table(year, gp, stype, selected_list)
-    else:
-        _ensure_session_loading(year, gp, stype)
-        table = html.Div([
-            html.Div("Cargando datos de sesión…",
-                     style={"color": "#fff", "fontSize": "15px", "marginBottom": "6px"}),
-            html.Div(f"{gp} · {stype} {year} — actualizando cada 5 s",
-                     style={"color": MUTED, "fontSize": "12px"}),
-        ], style={"padding": "60px", "textAlign": "center"})
+        return (
+            create_table(year, gp, stype, selected_list),
+            html.Div(),
+            sess_info,
+            title,
+            flag_src
+        )
 
-    return (
-        table,
-        html.Div(),   # mapa desactivado para no bloquear
-        {"year": year, "gp": gp, "type": stype, "flag": flag_code},
-        title,
-        flag_src
-    )
+    # ── PRIORIDAD 4: conectando al feed / cargando datos ────────────────────
+    _ensure_session_loading(year, gp, stype)
+
+    connecting_msg = html.Div([
+        html.Div("⏳ Conectando al feed en vivo…",
+                 style={"color": "#fff", "fontSize": "15px", "marginBottom": "8px", "fontWeight": "600"}),
+        html.Div("El timing aparecerá automáticamente en cuanto lleguen datos de F1.",
+                 style={"color": MUTED, "fontSize": "13px"}),
+    ], style={"padding": "80px 40px", "textAlign": "center"})
+
+    return (connecting_msg, html.Div(), sess_info or sess_old, title, flag_src)
 
 # ── REPLAY LOGIC ────────────────────────────────────────────────────────────
 @app.callback(
