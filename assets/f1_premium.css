@@ -30,7 +30,7 @@ body { background: var(--bg-base); color: var(--text-primary); margin: 0; }
 .f1-table {
   width: 100%;
   border-collapse: collapse;
-  table-layout: fixed;
+  table-layout: auto;
   font-family: var(--font-ui);
   background: var(--bg-base);
 }

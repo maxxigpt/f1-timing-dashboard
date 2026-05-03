@@ -957,14 +957,15 @@ def _create_placeholder_table(selected_list):
     Cuando el feed en vivo arranque, React solo rellena los valores vacíos;
     el DOM structure es idéntico → sin salto visual.
     """
-    # 26 segmentos vacíos: S1=9, S2=9, S3=8 (+ 2 gaps)
-    empty_segs = (
-        [html.Div(className="f1-seg") for _ in range(9)]
-        + [html.Div(className="f1-seg seg-gap")]
-        + [html.Div(className="f1-seg") for _ in range(9)]
-        + [html.Div(className="f1-seg seg-gap")]
-        + [html.Div(className="f1-seg") for _ in range(8)]
-    )
+    def _empty_segs():
+        """Crea segmentos vacíos únicos por fila — evita compartir el mismo objeto entre filas."""
+        return (
+            [html.Div(className="f1-seg") for _ in range(9)]
+            + [html.Div(className="f1-seg seg-gap")]
+            + [html.Div(className="f1-seg") for _ in range(9)]
+            + [html.Div(className="f1-seg seg-gap")]
+            + [html.Div(className="f1-seg") for _ in range(8)]
+        )
 
     rows = []
     # Ordenar por número de piloto (sin posición aún, orden fijo)
@@ -1005,7 +1006,7 @@ def _create_placeholder_table(selected_list):
                 ])),
                 html.Td(html.Span("–:–––––", className="f1-time t-muted")),
                 html.Td(html.Span("–:–––––", className="f1-time t-muted")),
-                html.Td(html.Div(empty_segs, className="f1-minisectors")),
+                html.Td(html.Div(_empty_segs(), className="f1-minisectors")),
                 html.Td(html.Span("", className="f1-sector t-muted"), style={"borderRight":"none"}),
                 html.Td(html.Span("", className="f1-sector t-muted"), style={"borderRight":"none"}),
                 html.Td(html.Span("", className="f1-sector t-muted")),
@@ -1019,18 +1020,18 @@ def _create_placeholder_table(selected_list):
         ]),
         html.Table(className="f1-table", children=[
             html.Thead(html.Tr([
-                html.Th("PIT",          style={"width":"30px"}),
-                html.Th("P",            className="th-left", style={"width":"28px"}),
-                html.Th("DRIVER",       className="th-left", style={"minWidth":"170px"}),
-                html.Th("INTERVAL"),
-                html.Th("LEADER"),
-                html.Th("TYRE"),
-                html.Th("BEST LAP"),
-                html.Th("LAST LAP"),
-                html.Th("MINI SECTORS", style={"minWidth":"130px"}),
-                html.Th("S1", style={"borderRight":"none"}),
-                html.Th("S2", style={"borderRight":"none"}),
-                html.Th("S3"),
+                html.Th("PIT",          style={"width":"34px",  "minWidth":"34px"}),
+                html.Th("P",            className="th-left", style={"width":"28px", "minWidth":"28px"}),
+                html.Th("DRIVER",       className="th-left", style={"width":"190px","minWidth":"190px"}),
+                html.Th("INTERVAL",     style={"width":"80px",  "minWidth":"80px"}),
+                html.Th("LEADER",       style={"width":"80px",  "minWidth":"80px"}),
+                html.Th("TYRE",         style={"width":"56px",  "minWidth":"56px"}),
+                html.Th("BEST LAP",     style={"width":"82px",  "minWidth":"82px"}),
+                html.Th("LAST LAP",     style={"width":"82px",  "minWidth":"82px"}),
+                html.Th("MINI SECTORS", style={"width":"200px", "minWidth":"200px"}),
+                html.Th("S1", style={"borderRight":"none", "width":"58px"}),
+                html.Th("S2", style={"borderRight":"none", "width":"58px"}),
+                html.Th("S3",           style={"width":"58px"}),
             ])),
             html.Tbody(rows),
         ])
@@ -1224,18 +1225,18 @@ def create_live_table(selected_list):
         ]),
         html.Table(className="f1-table", children=[
             html.Thead(html.Tr([
-                html.Th("PIT",          style={"width":"30px"}),
-                html.Th("P",            className="th-left", style={"width":"28px"}),
-                html.Th("DRIVER",       className="th-left", style={"minWidth":"170px"}),
-                html.Th("INTERVAL"),
-                html.Th("LEADER"),
-                html.Th("TYRE"),
-                html.Th("BEST LAP"),
-                html.Th("LAST LAP"),
-                html.Th("MINI SECTORS", style={"minWidth":"130px"}),
-                html.Th("S1", style={"borderRight":"none"}),
-                html.Th("S2", style={"borderRight":"none"}),
-                html.Th("S3"),
+                html.Th("PIT",          style={"width":"34px",  "minWidth":"34px"}),
+                html.Th("P",            className="th-left", style={"width":"28px", "minWidth":"28px"}),
+                html.Th("DRIVER",       className="th-left", style={"width":"190px","minWidth":"190px"}),
+                html.Th("INTERVAL",     style={"width":"80px",  "minWidth":"80px"}),
+                html.Th("LEADER",       style={"width":"80px",  "minWidth":"80px"}),
+                html.Th("TYRE",         style={"width":"56px",  "minWidth":"56px"}),
+                html.Th("BEST LAP",     style={"width":"82px",  "minWidth":"82px"}),
+                html.Th("LAST LAP",     style={"width":"82px",  "minWidth":"82px"}),
+                html.Th("MINI SECTORS", style={"width":"200px", "minWidth":"200px"}),
+                html.Th("S1", style={"borderRight":"none", "width":"58px"}),
+                html.Th("S2", style={"borderRight":"none", "width":"58px"}),
+                html.Th("S3",           style={"width":"58px"}),
             ])),
             html.Tbody(rows),
         ])
