@@ -79,6 +79,7 @@ def _drv_default():
             2: {"value":"","secs":None,"pb":False,"ob":False,"segments":{}},
         },
         "compound":"?","tyre_laps":0,"tyre_new":True,
+        "in_pit": False, "pit_out": False,
     }
 
 def _proc_timing_data(msg):
@@ -92,6 +93,8 @@ def _proc_timing_data(msg):
         itv = data.get("IntervalToPositionAhead")
         if isinstance(itv, dict):
             d["interval"] = str(itv.get("Value",""))
+        if "InPit"  in data: d["in_pit"]  = bool(data["InPit"])
+        if "PitOut" in data: d["pit_out"] = bool(data["PitOut"])
         ll = data.get("LastLapTime")
         if isinstance(ll, dict) and ll.get("Value"):
             d["last_lap_str"] = ll["Value"]

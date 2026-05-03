@@ -1,0 +1,352 @@
+/* ═══════════════════════════════════════════════════════
+   F1 TIMING DASHBOARD — Premium Dark Mode
+   ═══════════════════════════════════════════════════════ */
+
+:root {
+  --bg-base:        #0b0e11;
+  --bg-header:      #13171f;
+  --bg-row:         #0f1218;
+  --bg-row-alt:     #111418;
+  --bg-hover:       #1a1f2b;
+  --border:         #1e2535;
+  --border-strong:  #252d3d;
+  --text-primary:   #e8eaf0;
+  --text-secondary: #7a8499;
+  --text-muted:     #454e60;
+
+  --purple:  #b15dff;
+  --green:   #00d21e;
+  --yellow:  #ffd700;
+  --red:     #ff3333;
+  --white:   #ffffff;
+
+  --font-mono: 'Fira Code', 'JetBrains Mono', 'Roboto Mono', monospace;
+  --font-ui:   'Inter', 'Segoe UI', sans-serif;
+}
+
+body { background: var(--bg-base); color: var(--text-primary); margin: 0; }
+
+/* ── TABLA PRINCIPAL ─────────────────────────────────── */
+.f1-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-family: var(--font-ui);
+  background: var(--bg-base);
+}
+
+/* ── HEADER ──────────────────────────────────────────── */
+.f1-table thead tr {
+  background: var(--bg-header);
+  border-bottom: 1px solid var(--border-strong);
+}
+.f1-table thead th {
+  padding: 9px 8px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  text-align: center;
+  border-right: 1px solid var(--border);
+  white-space: nowrap;
+  font-family: var(--font-ui);
+}
+.f1-table thead th.th-left { text-align: left; }
+.f1-table thead th:last-child { border-right: none; }
+
+/* ── FILAS ───────────────────────────────────────────── */
+.f1-table tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background 0.12s ease;
+  position: relative;
+}
+.f1-table tbody tr:nth-child(even) { background: var(--bg-row-alt); }
+.f1-table tbody tr:nth-child(odd)  { background: var(--bg-row); }
+.f1-table tbody tr:hover            { background: var(--bg-hover) !important; }
+
+/* ── CELDAS ──────────────────────────────────────────── */
+.f1-table tbody td {
+  padding: 6px 8px;
+  font-size: 0.82rem;
+  text-align: center;
+  border-right: 1px solid var(--border);
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.f1-table tbody td:last-child { border-right: none; }
+
+/* ── COLUMNA POSICIÓN ────────────────────────────────── */
+.f1-pos {
+  width: 32px;
+  font-size: 0.85rem;
+  font-weight: 800;
+  text-align: center !important;
+  color: #000;
+  padding: 0 !important;
+  border-right: none !important;
+}
+
+/* ── BARRA EQUIPO (izquierda de la fila de piloto) ───── */
+.f1-team-stripe {
+  display: inline-block;
+  width: 3px;
+  height: 28px;
+  border-radius: 2px;
+  margin-right: 8px;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+
+/* ── CELDA PILOTO ────────────────────────────────────── */
+.f1-driver-cell {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  text-align: left !important;
+}
+.f1-num-badge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 2px 5px;
+  border-radius: 3px;
+  color: #000;
+  min-width: 24px;
+  text-align: center;
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+}
+.f1-tla {
+  font-weight: 700;
+  font-size: 0.9rem;
+  letter-spacing: 0.04em;
+  font-family: var(--font-ui);
+}
+.f1-lastname {
+  font-weight: 400;
+  font-size: 0.82rem;
+  color: #c0c8d8;
+  font-family: var(--font-ui);
+}
+
+/* ── TIEMPOS (monospace para no saltar) ──────────────── */
+.f1-time {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--text-primary);
+}
+.f1-time.t-purple {
+  color: var(--purple);
+  background: rgba(177, 93, 255, 0.10);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+.f1-time.t-green  { color: var(--green); }
+.f1-time.t-yellow { color: var(--yellow); }
+.f1-time.t-white  { color: var(--white); }
+.f1-time.t-muted  { color: var(--text-secondary); }
+
+/* ── FLASH en actualización ──────────────────────────── */
+@keyframes f1-flash {
+  0%   { background-color: rgba(255,255,255,0.12); }
+  100% { background-color: transparent; }
+}
+.f1-time.updated {
+  animation: f1-flash 0.45s ease-out forwards;
+  border-radius: 3px;
+}
+
+/* ── GAP ─────────────────────────────────────────────── */
+.f1-gap-leader {
+  color: var(--green);
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  font-family: var(--font-ui);
+}
+.f1-gap-val {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+/* ── NEUMÁTICO ───────────────────────────────────────── */
+.f1-tyre-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.f1-tyre-letter {
+  font-weight: 800;
+  font-size: 0.95rem;
+  font-family: var(--font-ui);
+}
+.f1-tyre-laps {
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+/* ── MINISECTORES ────────────────────────────────────── */
+.f1-minisectors {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 22px;
+  padding: 0 4px;
+}
+.f1-seg {
+  width: 7px;
+  height: 18px;
+  border-radius: 2px;
+  background: #1e2535;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+.f1-seg.seg-yellow {
+  background: var(--yellow);
+}
+.f1-seg.seg-green {
+  background: var(--green);
+  box-shadow: 0 0 4px rgba(0, 210, 30, 0.5);
+}
+.f1-seg.seg-purple {
+  background: var(--purple);
+  box-shadow: 0 0 5px rgba(177, 93, 255, 0.6);
+}
+.f1-seg.seg-gap {
+  width: 5px;
+  background: transparent;
+}
+
+/* ── SECTORES S1/S2/S3 ───────────────────────────────── */
+.f1-sector {
+  font-family: var(--font-mono);
+  font-size: 0.80rem;
+  font-weight: 500;
+  padding: 1px 3px;
+  border-radius: 2px;
+}
+.f1-sector.t-purple { color: var(--purple); background: rgba(177,93,255,0.10); }
+.f1-sector.t-green  { color: var(--green); }
+.f1-sector.t-yellow { color: var(--yellow); }
+.f1-sector.t-muted  { color: var(--text-secondary); }
+
+/* ── BADGE LIVE ──────────────────────────────────────── */
+.f1-live-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  justify-content: flex-end;
+  padding: 3px 14px 2px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--red);
+  font-family: var(--font-ui);
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.3; }
+}
+.f1-live-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--red);
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+/* ── WRAPPER ─────────────────────────────────────────── */
+.f1-table-wrapper {
+  background: var(--bg-base);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+/* ── PIT STATUS ──────────────────────────────────────── */
+.f1-pit-cell {
+  width: 30px;
+  text-align: center !important;
+  padding: 0 2px !important;
+}
+.f1-pit-badge {
+  display: inline-block;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  padding: 2px 4px;
+  border-radius: 2px;
+  font-family: var(--font-ui);
+  line-height: 1.2;
+}
+.f1-pit-badge.pit-in  { color: #fff; background: var(--red); }
+.f1-pit-badge.pit-out { color: #000; background: var(--yellow); }
+
+/* ── INTERVAL ────────────────────────────────────────── */
+.f1-interval-val {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+/* ── TEAM LOGO ───────────────────────────────────────── */
+.f1-team-logo {
+  height: 18px;
+  width: auto;
+  max-width: 38px;
+  object-fit: contain;
+  opacity: 0.88;
+  flex-shrink: 0;
+  margin-left: auto;      /* empuja el logo al extremo derecho de la celda */
+  display: block;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.6));
+  image-rendering: -webkit-optimize-contrast;  /* nitidez en logos escalados */
+  image-rendering: crisp-edges;
+}
+/* Red Bull: fondo oscuro residual desaparece con screen sobre fila oscura */
+.f1-team-logo.logo-screen {
+  mix-blend-mode: screen;
+  opacity: 1;
+}
+/* Audi: 4 anillos horizontales — mismo alto que los demás, más ancho */
+.f1-team-logo.logo-audi {
+  height: 20px;
+  max-width: 64px;
+}
+
+/* ══════════════════════════════════════════════════════
+   CADILLAC — Identidad Blanca
+   Sobrescribe el color de equipo para PER y BOT.
+   El !important anula el style="" inline de Dash.
+   ══════════════════════════════════════════════════════ */
+.f1-tla.cadillac {
+  color: #ffffff !important;
+  text-shadow:
+    0 0 6px  rgba(255, 255, 255, 0.70),
+    0 0 14px rgba(255, 255, 255, 0.30);
+}
+.f1-num-badge.cadillac {
+  background-color: #ffffff !important;
+  color: #0b0e11 !important;   /* texto oscuro sobre fondo blanco */
+}
+.f1-team-stripe.cadillac {
+  background-color: #ffffff !important;
+  box-shadow: 0 0 5px rgba(255, 255, 255, 0.40);
+}
+
+/* ══════════════════════════════════════════════════════
+   PERFORMANCE — Limitar scope de repaints en 100 Hz
+   contain:layout paint style → el browser no propaga
+   cambios de layout/paint fuera del elemento.
+   .f1-seg usa contain:strict porque tiene w/h fijos.
+   ══════════════════════════════════════════════════════ */
+.f1-time    { contain: layout paint style; }
+.f1-sector  { contain: layout paint style; }
+.f1-seg     { contain: strict; }   /* width:7px height:18px definidos arriba → safe */

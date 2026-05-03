@@ -61,7 +61,32 @@ def get_session_data(year, gp, session_type, with_telemetry=False):
     return _session_mem[key]
 
 # ── SESSION AUTO-DETECTION ──────────────────────────────────────────────────
-_active_session_cache = {"data": None, "ts": 0}
+_active_session_cache  = {"data": None, "ts": 0}
+_detected_session_cache = {"data": None, "ts": 0}   # cache 5 min para detección de sesión actual
+
+def get_current_session_info():
+    """Detecta la sesión actual con cache de 5 minutos. No llama FF1 en cada tick."""
+    now_ts = time.time()
+    if now_ts - _detected_session_cache["ts"] < 300 and _detected_session_cache["data"]:
+        return _detected_session_cache["data"]
+    try:
+        sessions = get_ff1_latest_session()
+        if sessions:
+            s = sessions[0]
+            info = {
+                "year":  s.get("_ff1_year", pd.Timestamp.now().year),
+                "gp":    s.get("meeting_name", ""),
+                "type":  s.get("session_name", ""),
+                "flag":  s.get("country_code", "us"),
+                "_ff1_gp":    s.get("_ff1_gp", ""),
+                "_ff1_stype": s.get("_ff1_stype", ""),
+            }
+            _detected_session_cache["data"] = info
+            _detected_session_cache["ts"]   = now_ts
+            return info
+    except Exception as e:
+        print(f"[SessionDetect] {e}")
+    return _detected_session_cache.get("data") or {}
 
 def get_current_active_session():
     now_ts = time.time()
@@ -90,6 +115,51 @@ def get_current_active_session():
         print(f"[WARN] {e}")
     return best
 
+# ── MAPA ESTÁTICO DE PILOTOS 2026 ───────────────────────────────────────────
+# Grilla completa 2026: 11 equipos × 2 pilotos = 22 pilotos
+# Norris es campeón y lleva el #1; Verstappen eligió el #3.
+# Nuevos equipos: Audi (ex-Kick Sauber) y Cadillac.
+DRIVER_STATIC = {
+    "1":  {"tla":"NOR","full_name":"Lando Norris",          "team":"McLaren"},
+    "3":  {"tla":"VER","full_name":"Max Verstappen",         "team":"Red Bull Racing"},
+    "5":  {"tla":"BOR","full_name":"Gabriel Bortoleto",      "team":"Audi"},
+    "6":  {"tla":"HAD","full_name":"Isack Hadjar",           "team":"Red Bull Racing"},
+    "10": {"tla":"GAS","full_name":"Pierre Gasly",           "team":"Alpine"},
+    "11": {"tla":"PER","full_name":"Sergio Pérez",           "team":"Cadillac"},
+    "12": {"tla":"ANT","full_name":"Andrea Kimi Antonelli",  "team":"Mercedes"},
+    "14": {"tla":"ALO","full_name":"Fernando Alonso",        "team":"Aston Martin"},
+    "16": {"tla":"LEC","full_name":"Charles Leclerc",        "team":"Ferrari"},
+    "18": {"tla":"STR","full_name":"Lance Stroll",           "team":"Aston Martin"},
+    "23": {"tla":"ALB","full_name":"Alexander Albon",        "team":"Williams"},
+    "27": {"tla":"HUL","full_name":"Nico Hülkenberg",        "team":"Audi"},
+    "30": {"tla":"LAW","full_name":"Liam Lawson",            "team":"Racing Bulls"},
+    "31": {"tla":"OCO","full_name":"Esteban Ocon",           "team":"Haas F1 Team"},
+    "41": {"tla":"LIN","full_name":"Arvid Lindblad",         "team":"Racing Bulls"},
+    "43": {"tla":"COL","full_name":"Franco Colapinto",       "team":"Alpine"},
+    "44": {"tla":"HAM","full_name":"Lewis Hamilton",         "team":"Ferrari"},
+    "55": {"tla":"SAI","full_name":"Carlos Sainz",           "team":"Williams"},
+    "63": {"tla":"RUS","full_name":"George Russell",         "team":"Mercedes"},
+    "77": {"tla":"BOT","full_name":"Valtteri Bottas",        "team":"Cadillac"},
+    "81": {"tla":"PIA","full_name":"Oscar Piastri",          "team":"McLaren"},
+    "87": {"tla":"BEA","full_name":"Oliver Bearman",         "team":"Haas F1 Team"},
+}
+
+def get_driver_info(drv_num, dlist):
+    """Devuelve info del piloto: primero del feed, luego del mapa estático."""
+    if drv_num in dlist and dlist[drv_num].get("tla"):
+        return dlist[drv_num]
+    static = DRIVER_STATIC.get(str(drv_num), {})
+    if static:
+        team = static.get("team","")
+        return {
+            "tla":        static["tla"],
+            "full_name":  static["full_name"],
+            "team":       team,
+            "team_color": TEAM_COLORS.get(team, "#888888"),
+            "number":     str(drv_num),
+        }
+    return {"tla": str(drv_num), "full_name": "", "team": "", "team_color": "#888888", "number": str(drv_num)}
+
 # ── COLORS & STYLE ──────────────────────────────────────────────────────────
 BG_COLOR = "#0b0e11"
 TABLE_HEADER_BG = "#1e2235"
@@ -108,7 +178,9 @@ TEAM_COLORS = {
     "Williams": "#64C4FF",
     "RB": "#6692FF", "Racing Bulls": "#6692FF", "Visa Cash App RB": "#6692FF", "AlphaTauri": "#6692FF",
     "Kick Sauber": "#52E252", "Sauber": "#52E252", "Alfa Romeo": "#900000",
-    "Haas F1 Team": "#B6BABD", "Haas": "#B6BABD"
+    "Haas F1 Team": "#B6BABD", "Haas": "#B6BABD",
+    "Audi": "#C0BFBF",       # Audi (ex-Kick Sauber) — silver/grey Audi brand color
+    "Cadillac": "#CF102D",   # Cadillac — American red
 }
 
 # ── OPENF1 & FF1 CONSTANTS ──────────────────────────────────────────────────
@@ -259,6 +331,22 @@ TEAM_LOGOS = {
     "Alfa Romeo": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9e/Stake_F1_Team_Kick_Sauber_logo.svg/100px-Stake_F1_Team_Kick_Sauber_logo.svg.png",
     "Haas F1 Team": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Haas_F1_team_logo.svg/100px-Haas_F1_team_logo.svg.png",
     "Haas": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Haas_F1_team_logo.svg/100px-Haas_F1_team_logo.svg.png",
+}
+
+# ── LOGOS LOCALES (assets/logos/processed/) — fondo eliminado, alta calidad ──
+# "logo-screen" = usar mix-blend-mode:screen para logos con fondo oscuro residual
+TEAM_LOGO_LOCAL = {
+    "Red Bull Racing": ("/assets/logos/processed/red_bull.png",    "logo-screen"),
+    "Ferrari":         ("/assets/logos/processed/ferrari.png",     ""),
+    "McLaren":         ("/assets/logos/processed/mclaren.png",     ""),
+    "Mercedes":        ("/assets/logos/processed/mercedes.png",    ""),
+    "Aston Martin":    ("/assets/logos/processed/aston_martin.png",""),
+    "Alpine":          ("/assets/logos/processed/alpine.png",      ""),
+    "Williams":        ("/assets/logos/processed/williams.png",    ""),
+    "Racing Bulls":    ("/assets/logos/processed/racing_bulls.png",""),
+    "Audi":            ("/assets/logos/processed/audi.png",        "logo-audi"),
+    "Cadillac":        ("/assets/logos/processed/cadillac.png",    ""),
+    "Haas F1 Team":    ("/assets/logos/processed/haas.png",        ""),
 }
 
 def format_time(delta):
@@ -546,14 +634,43 @@ def create_table(year, gp, session_type, selected_list):
 
         selected_list = selected_list or []
 
+        # ── Re-numerar posiciones secuencialmente para evitar duplicados del feed ──
+        # FastF1 a veces asigna el mismo número a dos pilotos y Time=NaT para todos.
+        # Solución: usar el mejor tiempo real de laps como clave de ordenación.
+        r = r.copy()
+        r["Position"] = pd.to_numeric(r["Position"], errors="coerce")
+
+        if not laps.empty:
+            # Mejor vuelta de cada piloto (en segundos) → desempata duplicados
+            bl = (
+                laps.groupby("Driver")["LapTime"]
+                .min()
+                .dropna()
+                .apply(lambda x: x.total_seconds())
+                .rename("_best_secs")
+                .reset_index()
+                .rename(columns={"Driver": "Abbreviation"})
+            )
+            r = r.merge(bl, on="Abbreviation", how="left")
+            r["_best_secs"] = r["_best_secs"].fillna(float("inf"))
+            r = r.sort_values(["Position", "_best_secs"]).reset_index(drop=True)
+            r = r.drop(columns=["_best_secs"])
+        else:
+            r = r.sort_values("Position").reset_index(drop=True)
+
+        r["Position"] = range(1, len(r) + 1)
+
         rows = []
         for i, row in r.iterrows():
             drv = str(row.get("Abbreviation", ""))
-            pos = str(row.get("Position", ""))
-            if pos.endswith(".0"): pos = pos[:-2]
+            pos = str(int(row["Position"]))
             team = row.get("TeamName", "")
             tcolor = TEAM_COLORS.get(team, "#ffffff")
             logo = TEAM_LOGOS.get(team, "")
+            # Logos locales procesados (fondo eliminado, alta calidad)
+            _ld      = TEAM_LOGO_LOCAL.get(team)
+            logo_src = _ld[0] if _ld else ""
+            logo_blend = _ld[1] if _ld else ""
 
             row_bg = ROW_BG
             if len(selected_list) > 0 and drv == selected_list[0]:
@@ -618,15 +735,16 @@ def create_table(year, gp, session_type, selected_list):
             sc1 = seg_color(last_s1, best_s1, overall_best_s1)
             sc2 = seg_color(last_s2, best_s2, overall_best_s2)
             sc3 = seg_color(last_s3, best_s3, overall_best_s3)
-            _gap = html.Div(style={"width": "3px", "height": "16px", "backgroundColor": "transparent", "flexShrink": "0"})
+            _gap = html.Div(style={"width": "5px", "height": "18px", "backgroundColor": "transparent", "flexShrink": "0"})
+            _seg = lambda c: html.Div(style={"width": "7px", "height": "18px", "backgroundColor": c, "flexShrink": "0", "borderRadius": "2px"})
             mini_sectors = html.Div(
-                style={"display": "flex", "gap": "1px", "height": "16px", "alignItems": "center", "justifyContent": "center", "flexWrap": "nowrap"},
+                style={"display": "flex", "gap": "2px", "height": "18px", "alignItems": "center", "justifyContent": "center", "flexWrap": "nowrap"},
                 children=(
-                    [html.Div(style={"width": "3px", "height": "16px", "backgroundColor": sc1, "flexShrink": "0"}) for _ in range(8)]
+                    [_seg(sc1) for _ in range(9)]   # S1 → 9 segmentos
                     + [_gap]
-                    + [html.Div(style={"width": "3px", "height": "16px", "backgroundColor": sc2, "flexShrink": "0"}) for _ in range(8)]
+                    + [_seg(sc2) for _ in range(9)]  # S2 → 9 segmentos
                     + [_gap]
-                    + [html.Div(style={"width": "3px", "height": "16px", "backgroundColor": sc3, "flexShrink": "0"}) for _ in range(8)]
+                    + [_seg(sc3) for _ in range(8)]  # S3 → 8 segmentos
                 )
             )
 
@@ -641,9 +759,19 @@ def create_table(year, gp, session_type, selected_list):
             last_lap_color = COLOR_GREEN if (not pd.isna(last_lap) and not pd.isna(best_lap) and last_lap == best_lap) else "#d1d5db"
 
             rows.append(html.Tr(id={'type': 'driver-row', 'index': drv}, style={"backgroundColor": row_bg, "transition": "background-color 0.1s"}, children=[
+                html.Td(None, className="f1-pit-cell"),
                 html.Td(pos, style={"backgroundColor": tcolor, "color": "#000", "fontWeight": "800", "textAlign": "center", "width": "25px", "borderBottom": "1px solid #1a1e2b"}),
-                html.Td(html.Div(style={"display": "flex", "alignItems": "center"}, children=[
-                    html.Img(src=logo, style={"height": "10px", "marginRight": "8px", "filter": "brightness(0) invert(1) opacity(0.8)"}) if logo else html.Span(style={"width":"18px"}),
+                html.Td(html.Div(style={"display": "flex", "alignItems": "center", "gap": "7px"}, children=[
+                    html.Img(
+                        src=logo_src,
+                        style={
+                            "height": "18px", "width": "auto", "maxWidth": "36px",
+                            "objectFit": "contain", "flexShrink": "0",
+                            "mixBlendMode": "screen" if logo_blend == "logo-screen" else "normal",
+                            "opacity": "0.9",
+                            "filter": "drop-shadow(0 1px 2px rgba(0,0,0,0.5))",
+                        }
+                    ) if logo_src else html.Span(style={"width": "20px", "display": "inline-block"}),
                     html.Span(drv, style={"color": tcolor, "fontWeight": "700", "fontSize": "0.9rem"})
                 ]), style=td_s),
                 html.Td(html.Span(interval, style=int_style), style=td_center),
@@ -665,7 +793,8 @@ def create_table(year, gp, session_type, selected_list):
             children=[
                 html.Thead([
                     html.Tr([
-                        html.Th("⋮⋮", style={**th_center, "width": "25px"}),
+                        html.Th("PIT", style={**th_center, "width": "30px"}),
+                        html.Th("⋮⋮",  style={**th_center, "width": "25px"}),
                         html.Th("⋮⋮ DRIVER ↑", style=th_s),
                         html.Th("⋮⋮ INTERVAL ↑", style=th_center),
                         html.Th("⋮⋮ TYRE ↑", style=th_center),
@@ -821,198 +950,295 @@ def build_timing_table_ff1(year, gp, stype):
     rows.sort(key=lambda x: (x["position"] is None, x["position"] or 999))
     return rows, {"best_lap":obb,"best_s1":obs1,"best_s2":obs2,"best_s3":obs3}
 
-# ── LIVE TABLE (feed oficial F1) ─────────────────────────────────────────────
+# ── TABLA PLACEHOLDER (nombres estáticos mientras carga FastF1) ──────────────
+def _create_placeholder_table(selected_list):
+    """
+    Tabla de espera con las MISMAS clases CSS que create_live_table().
+    Cuando el feed en vivo arranque, React solo rellena los valores vacíos;
+    el DOM structure es idéntico → sin salto visual.
+    """
+    # 26 segmentos vacíos: S1=9, S2=9, S3=8 (+ 2 gaps)
+    empty_segs = (
+        [html.Div(className="f1-seg") for _ in range(9)]
+        + [html.Div(className="f1-seg seg-gap")]
+        + [html.Div(className="f1-seg") for _ in range(9)]
+        + [html.Div(className="f1-seg seg-gap")]
+        + [html.Div(className="f1-seg") for _ in range(8)]
+    )
+
+    rows = []
+    # Ordenar por número de piloto (sin posición aún, orden fijo)
+    for num in sorted(DRIVER_STATIC.keys(), key=lambda x: int(x)):
+        info      = DRIVER_STATIC[num]
+        tla       = info["tla"]
+        full_name = info["full_name"]
+        team      = info["team"]
+        tcolor    = TEAM_COLORS.get(team, "#555")
+        last_name = full_name.split(" ", 1)[-1] if full_name else ""
+
+        is_cadillac  = (team == "Cadillac")
+        cadillac_cls = " cadillac" if is_cadillac else ""
+
+        logo_data    = TEAM_LOGO_LOCAL.get(team)
+        logo_src     = logo_data[0] if logo_data else None
+        logo_cls     = ("f1-team-logo " + logo_data[1]).strip() if logo_data else "f1-team-logo"
+
+        driver_cell = html.Div(className="f1-driver-cell", children=[
+            html.Div(className=f"f1-team-stripe{cadillac_cls}", style={"backgroundColor": tcolor}),
+            html.Span(num,       className=f"f1-num-badge{cadillac_cls}", style={"backgroundColor": tcolor}),
+            html.Span(tla,       className=f"f1-tla{cadillac_cls}",       style={"color": tcolor}),
+            html.Span(last_name, className="f1-lastname"),
+            html.Img(src=logo_src, className=logo_cls) if logo_src else None,
+        ])
+
+        rows.append(html.Tr(
+            id={'type':'driver-row','index':tla},
+            className="f1-table-row",
+            children=[
+                html.Td(None, className="f1-pit-cell"),
+                html.Td("–", className="f1-pos", style={"backgroundColor": "transparent"}),
+                html.Td(driver_cell),
+                html.Td(html.Span("–", className="f1-interval-val")),
+                html.Td(html.Span("–", className="f1-gap-val")),
+                html.Td(html.Div(className="f1-tyre-cell", children=[
+                    html.Span("?", className="f1-tyre-letter", style={"color":"#555"}),
+                ])),
+                html.Td(html.Span("–:–––––", className="f1-time t-muted")),
+                html.Td(html.Span("–:–––––", className="f1-time t-muted")),
+                html.Td(html.Div(empty_segs, className="f1-minisectors")),
+                html.Td(html.Span("", className="f1-sector t-muted"), style={"borderRight":"none"}),
+                html.Td(html.Span("", className="f1-sector t-muted"), style={"borderRight":"none"}),
+                html.Td(html.Span("", className="f1-sector t-muted")),
+            ]
+        ))
+
+    return html.Div(className="f1-table-wrapper", children=[
+        html.Div(className="f1-live-badge", style={"opacity":"0.4"}, children=[
+            html.Div(className="f1-live-dot"),
+            html.Span("EN ESPERA"),
+        ]),
+        html.Table(className="f1-table", children=[
+            html.Thead(html.Tr([
+                html.Th("PIT",          style={"width":"30px"}),
+                html.Th("P",            className="th-left", style={"width":"28px"}),
+                html.Th("DRIVER",       className="th-left", style={"minWidth":"170px"}),
+                html.Th("INTERVAL"),
+                html.Th("LEADER"),
+                html.Th("TYRE"),
+                html.Th("BEST LAP"),
+                html.Th("LAST LAP"),
+                html.Th("MINI SECTORS", style={"minWidth":"130px"}),
+                html.Th("S1", style={"borderRight":"none"}),
+                html.Th("S2", style={"borderRight":"none"}),
+                html.Th("S3"),
+            ])),
+            html.Tbody(rows),
+        ])
+    ])
+
+# ── SANITIZACIÓN DE POSICIÓN ─────────────────────────────────────────────────
+# Buffer module-level: mantiene el último entero válido por número de piloto.
+# Nunca retorna NaN, None-string ni vacío al DOM.
+_pos_buffer: dict = {}
+
+def _safe_pos(drv_num: str, raw) -> int | None:
+    """
+    Convierte el campo posición a int limpio.
+    - Si es válido (> 0): actualiza el buffer y retorna el int.
+    - Si no (NaN, "", None, "NaN", float): retorna el último conocido o None.
+    Garantiza que sort_key y el DOM nunca reciban un valor inválido.
+    """
+    try:
+        n = int(float(str(raw)))     # float() primero absorbe "NaN", "1.0", etc.
+        if n > 0:
+            _pos_buffer[drv_num] = n
+            return n
+    except (ValueError, TypeError):
+        pass
+    return _pos_buffer.get(drv_num)  # None si no se ha visto aún
+
+# ── LIVE TABLE — Premium F1 Dark Mode ────────────────────────────────────────
 def create_live_table(selected_list):
-    """Tabla construida 100% desde el feed de live timing — microsectores reales."""
     state   = live_timing.get_state()
     drivers = state["drivers"]
     dlist   = state["driver_list"]
 
-    if not drivers:
-        return html.Div(
-            "⏳ Conectando al feed en vivo de F1…",
-            style={"color": MUTED, "padding": "60px", "textAlign": "center", "fontSize": "1.2rem"}
-        )
+    # Construir lista completa: feed live + todos los conocidos del static map
+    # Así siempre se muestran todos los pilotos aunque el feed solo tenga algunos
+    all_nums = set(drivers.keys()) | set(DRIVER_STATIC.keys())
+    # Si el feed no tiene NINGÚN piloto, mostrar mensaje
+    if not drivers and not dlist:
+        return html.Div("⏳ Conectando al feed en vivo de F1…",
+            style={"color": MUTED, "padding": "60px", "textAlign": "center", "fontSize": "1.1rem"})
 
-    best = live_timing.get_overall_best(drivers)
+    best   = live_timing.get_overall_best(drivers)
     ob_lap = best["lap"]
     ob_s   = [best["s0"], best["s1"], best["s2"]]
-
-    th_s      = {"backgroundColor": TABLE_HEADER_BG, "color": "#a0aab8", "fontSize": "0.75rem",
-                 "fontWeight": "600", "padding": "8px 4px", "borderBottom": "2px solid #2a2f45",
-                 "borderRight": "1px solid #1a1e2b", "fontFamily": "'Fira Code', monospace", "textAlign": "left"}
-    th_center = {**th_s, "textAlign": "center"}
-    td_s      = {"padding": "4px 4px", "borderBottom": "1px solid #1a1e2b", "borderRight": "1px solid #1a1e2b",
-                 "fontSize": "0.85rem", "fontWeight": "500", "color": "#fff",
-                 "fontFamily": "'Fira Code', monospace", "textAlign": "left",
-                 "verticalAlign": "middle", "whiteSpace": "nowrap", "cursor": "pointer"}
-    td_center = {**td_s, "textAlign": "center"}
-
     selected_list = selected_list or []
 
-    # Ordenar por posición → mejor vuelta → número de piloto
-    def sort_key(item):
-        drv_num, d = item
-        pos = d.get("position", "")
-        try: pos_n = int(pos)
-        except Exception: pos_n = 99
-        bl = d.get("best_lap") or 9999
-        return (pos_n, bl, drv_num)
+    def sort_key(num):
+        d     = drivers.get(num, {})
+        pos_n = _safe_pos(num, d.get("position", "")) or 99
+        has_time = 0 if d.get("best_lap") else 1
+        return (has_time, pos_n, d.get("best_lap") or 9999, num)
 
-    sorted_drivers = sorted(drivers.items(), key=sort_key)
+    SEG_CSS = {
+        0:"f1-seg", 256:"f1-seg",
+        2048:"f1-seg seg-yellow", 2049:"f1-seg seg-green", 2051:"f1-seg seg-purple"
+    }
 
     rows = []
-    for drv_num, d in sorted_drivers:
-        info  = dlist.get(drv_num, {})
-        tla   = info.get("tla") or drv_num
-        team  = info.get("team", "")
-        raw_color = info.get("team_color", "#888888")
-        tcolor = TEAM_COLORS.get(team, raw_color)
-        logo   = TEAM_LOGOS.get(team, "")
-        pos    = d.get("position", "")
+    for drv_num in sorted(all_nums, key=sort_key):
+        d    = drivers.get(drv_num, {})
+        info = get_driver_info(drv_num, dlist)
+        tla       = info.get("tla") or drv_num
+        full_name = info.get("full_name", "")
+        team      = info.get("team", "")
+        tcolor    = TEAM_COLORS.get(team, info.get("team_color","#555"))
+        pos_int   = _safe_pos(drv_num, d.get("position", ""))
+        pos_disp  = str(pos_int) if pos_int else "–"
+        last_name = full_name.split(" ", 1)[-1] if full_name else ""
+        # Cadillac: clase CSS extra para identidad blanca
+        is_cadillac  = (team == "Cadillac")
+        cadillac_cls = " cadillac" if is_cadillac else ""
 
-        row_bg = ROW_BG
-        if len(selected_list) > 0 and tla == selected_list[0]:
-            row_bg = "rgba(0, 210, 30, 0.25)"
+        # Row highlight
+        row_style = {}
+        if selected_list and tla == selected_list[0]:
+            row_style = {"backgroundColor":"rgba(0,210,30,0.10)"}
         elif len(selected_list) > 1 and tla == selected_list[1]:
-            row_bg = "rgba(255, 0, 0, 0.25)"
+            row_style = {"backgroundColor":"rgba(255,60,60,0.10)"}
 
-        # Neumático
-        raw_c   = d.get("compound", "?")
-        comp_abbr  = live_timing.COMPOUND_ABBR.get(raw_c, raw_c[:1] if raw_c and raw_c != "?" else "?")
-        comp_color = live_timing.COMPOUND_COLOR.get(raw_c, "#d1d5db")
+        # Tyre
+        raw_c      = d.get("compound","?")
+        comp_abbr  = live_timing.COMPOUND_ABBR.get(raw_c, "?")
+        comp_color = live_timing.COMPOUND_COLOR.get(raw_c, "#888")
         tyre_laps  = d.get("tyre_laps", 0)
-        tyre_txt   = f"{tyre_laps} {comp_abbr}" if comp_abbr != "?" else "?"
+        tyre_cell  = html.Div(className="f1-tyre-cell", children=[
+            html.Span(comp_abbr, className="f1-tyre-letter", style={"color": comp_color}),
+            html.Span(f"+{tyre_laps}" if tyre_laps else "", className="f1-tyre-laps"),
+        ])
 
         # Tiempos
-        bl     = d.get("best_lap")
-        ll     = d.get("last_lap")
-        ll_pb  = d.get("last_lap_pb", False)
-        ll_ob  = d.get("last_lap_ob", False)
+        bl    = d.get("best_lap")
+        ll    = d.get("last_lap")
+        ll_ob = d.get("last_lap_ob", False)
+        ll_pb = d.get("last_lap_pb", False)
+        bl_is_ob = bl and ob_lap and abs(bl - ob_lap) < 0.001
 
-        bl_color = COLOR_PURPLE if (bl and ob_lap and abs(bl - ob_lap) < 0.001) else "#fff"
-        bl_bg    = "rgba(177,93,255,0.15)" if bl_color == COLOR_PURPLE else "transparent"
-        ll_color = COLOR_PURPLE if ll_ob else (COLOR_GREEN if ll_pb else "#d1d5db")
+        bl_cls = "f1-time updated " + ("t-purple" if bl_is_ob else "t-white" if bl else "t-muted")
+        ll_cls = "f1-time updated " + ("t-purple" if ll_ob else "t-green" if ll_pb else "t-muted" if not ll else "")
 
-        def sec_color_live(secs, si, is_pb, is_ob):
-            if secs is None: return TEXT_COLOR
-            if is_ob: return COLOR_PURPLE
-            if is_pb: return COLOR_GREEN
-            if ob_s[si] and abs(secs - ob_s[si]) < 0.001: return COLOR_PURPLE
-            return COLOR_YELLOW
+        def sec_cls(secs, si, is_pb, is_ob):
+            if not secs: return "f1-sector t-muted"
+            if is_ob or (ob_s[si] and abs(secs - ob_s[si]) < 0.001): return "f1-sector t-purple"
+            if is_pb: return "f1-sector t-green"
+            return "f1-sector t-yellow"
 
         sectors = d.get("sectors", {})
 
-        # Últimos sectores
+        # Sector cells
         ls_cells = []
         for si in range(3):
             sec  = sectors.get(si, {})
-            sval = sec.get("value", "")
-            secs = sec.get("secs")
-            is_pb = sec.get("pb", False)
-            is_ob = sec.get("ob", False)
-            sc   = sec_color_live(secs, si, is_pb, is_ob)
-            br   = "none" if si < 2 else None
-            style = {**td_center, "color": sc}
-            if br: style["borderRight"] = br
-            if is_ob: style["backgroundColor"] = "rgba(177,93,255,0.15)"
-            ls_cells.append(html.Td(sval, style=style))
+            sval = sec.get("value","")
+            sc   = sec_cls(sec.get("secs"), si, sec.get("pb",False), sec.get("ob",False))
+            br   = {"borderRight":"none"} if si < 2 else {}
+            bg   = {"backgroundColor":"rgba(177,93,255,0.08)"} if sec.get("ob") else {}
+            ls_cells.append(html.Td(
+                html.Span(sval, className=sc),
+                style={**br, **bg}
+            ))
 
-        # Microsectores reales (todos los segmentos del feed), separados por sector
-        mini_bars = []
+        # Mini sectores con CSS classes
+        SEG_COUNT = [9, 9, 8]  # S1=9, S2=9, S3=8
+        mini_segs = []
         for si in range(3):
             if si > 0:
-                mini_bars.append(html.Div(style={
-                    "width": "3px", "height": "16px",
-                    "backgroundColor": "transparent", "flexShrink": "0"
-                }))
-            segs = sectors.get(si, {}).get("segments", {})
+                mini_segs.append(html.Div(className="f1-seg seg-gap"))
+            segs = sectors.get(si,{}).get("segments",{})
             if segs:
-                for seg_idx in sorted(segs.keys()):
-                    status = segs[seg_idx]
-                    color  = live_timing.seg_color(status)
-                    mini_bars.append(html.Div(style={
-                        "width": "3px", "height": "16px",
-                        "backgroundColor": color, "flexShrink": "0"
-                    }))
+                for idx in sorted(segs.keys()):
+                    st = segs[idx]
+                    mini_segs.append(html.Div(className=SEG_CSS.get(int(st),"f1-seg")))
             else:
-                # Sin datos aún — 8 barras grises por sector
-                for _ in range(8):
-                    mini_bars.append(html.Div(style={
-                        "width": "3px", "height": "16px",
-                        "backgroundColor": "#374151", "flexShrink": "0"
-                    }))
+                mini_segs.extend([html.Div(className="f1-seg") for _ in range(SEG_COUNT[si])])
 
-        mini_sectors = html.Div(
-            style={"display": "flex", "gap": "1px", "height": "16px",
-                   "alignItems": "center", "justifyContent": "center", "flexWrap": "nowrap"},
-            children=mini_bars
-        )
+        # PIT status
+        in_pit  = d.get("in_pit",  False)
+        pit_out = d.get("pit_out", False)
+        if in_pit:
+            pit_el = html.Span("PIT", className="f1-pit-badge pit-in")
+        elif pit_out:
+            pit_el = html.Span("OUT", className="f1-pit-badge pit-out")
+        else:
+            pit_el = None
 
-        # Gap / interval
-        gap = d.get("gap", "")
-        if gap and not gap.startswith("+") and pos != "1": gap = f"+{gap}"
-        if pos == "1": gap = "Leader"
-        int_bg    = COLOR_GREEN if pos not in ("1", "") else "transparent"
-        int_color = "#000"      if pos not in ("1", "") else "#fff"
-        int_style = {"backgroundColor": int_bg, "color": int_color, "fontWeight": "700",
-                     "padding": "2px 4px", "borderRadius": "2px"} if pos not in ("1", "") else {"color": "#fff"}
+        # Gap al líder (LEADER)
+        gap = d.get("gap","")
+        if gap and not str(gap).startswith("+") and pos_int != 1: gap = f"+{gap}"
+        gap_el = html.Span("LEADER", className="f1-gap-leader") if pos_int == 1 else html.Span(gap, className="f1-gap-val")
+
+        # Interval (distancia al piloto de delante)
+        itv_raw = d.get("interval","")
+        if itv_raw and not str(itv_raw).startswith("+") and pos_int != 1: itv_raw = f"+{itv_raw}"
+        itv_el  = html.Span("–" if not itv_raw else itv_raw, className="f1-interval-val")
+
+        # Logo de equipo local
+        logo_data    = TEAM_LOGO_LOCAL.get(team)
+        logo_src     = logo_data[0] if logo_data else None
+        logo_cls     = ("f1-team-logo " + logo_data[1]).strip() if logo_data else "f1-team-logo"
+
+        # Driver cell — las clases cadillac sobrescriben el color inline vía CSS
+        driver_cell = html.Div(className="f1-driver-cell", children=[
+            html.Div(className=f"f1-team-stripe{cadillac_cls}", style={"backgroundColor": tcolor}),
+            html.Span(drv_num, className=f"f1-num-badge{cadillac_cls}", style={"backgroundColor": tcolor}),
+            html.Span(tla,     className=f"f1-tla{cadillac_cls}",       style={"color": tcolor}),
+            html.Span(last_name, className="f1-lastname"),
+            html.Img(src=logo_src, className=logo_cls) if logo_src else None,
+        ])
 
         rows.append(html.Tr(
-            id={'type': 'driver-row', 'index': tla},
-            style={"backgroundColor": row_bg, "transition": "background-color 0.1s"},
+            id={'type':'driver-row','index':tla},
+            className="f1-table-row",
+            style=row_style,
             children=[
-                html.Td(pos, style={"backgroundColor": tcolor, "color": "#000", "fontWeight": "800",
-                                    "textAlign": "center", "width": "25px", "borderBottom": "1px solid #1a1e2b"}),
-                html.Td(html.Div(style={"display": "flex", "alignItems": "center"}, children=[
-                    html.Img(src=logo, style={"height": "10px", "marginRight": "8px",
-                             "filter": "brightness(0) invert(1) opacity(0.8)"}) if logo else html.Span(style={"width": "18px"}),
-                    html.Span(tla, style={"color": tcolor, "fontWeight": "700", "fontSize": "0.9rem"})
-                ]), style=td_s),
-                html.Td(html.Span(gap, style=int_style), style=td_center),
-                html.Td(html.Span(tyre_txt, style={"color": comp_color, "fontWeight": "700"}), style=td_center),
-                html.Td(live_timing.fmt_time(bl), style={**td_center, "color": bl_color, "backgroundColor": bl_bg}),
-                html.Td(gap, style={**td_center, "color": "#d1d5db"}),
-                html.Td(live_timing.fmt_time(ll), style={**td_center, "color": ll_color}),
-                html.Td(mini_sectors, style={**td_center, "overflow": "hidden", "maxWidth": "200px"}),
+                html.Td(pit_el, className="f1-pit-cell"),
+                html.Td(pos_disp, className="f1-pos", style={"backgroundColor": tcolor if pos_int else "transparent"}),
+                html.Td(driver_cell),
+                html.Td(itv_el),
+                html.Td(gap_el),
+                html.Td(tyre_cell),
+                html.Td(html.Span(live_timing.fmt_time(bl) or "–", className=bl_cls,
+                                  style={"backgroundColor":"rgba(177,93,255,0.10)"} if bl_is_ob else {})),
+                html.Td(html.Span(live_timing.fmt_time(ll) or "–", className=ll_cls)),
+                html.Td(html.Div(mini_segs, className="f1-minisectors")),
                 *ls_cells,
-                # Best sectors — tomados del best_lap, no disponibles individualmente en live feed
-                html.Td("", style={**td_center, "borderRight": "none"}),
-                html.Td("", style={**td_center, "borderRight": "none"}),
-                html.Td("", style=td_center),
             ]
         ))
 
-    connected_badge = html.Span(
-        "🔴 LIVE",
-        style={"color": "#FF3333", "fontWeight": "700", "fontSize": "0.75rem",
-               "marginLeft": "10px", "animation": "pulse 1s infinite"}
-    )
-
-    return html.Div([
-        html.Div(connected_badge, style={"padding": "4px 10px", "textAlign": "right"}),
-        html.Table(
-            style={"width": "100%", "borderCollapse": "collapse", "borderRight": f"1px solid {BORDER_COLOR}"},
-            children=[
-                html.Thead([html.Tr([
-                    html.Th("P",                                   style={**th_center, "width": "25px"}),
-                    html.Th("DRIVER",                              style=th_s),
-                    html.Th("GAP",                                 style=th_center),
-                    html.Th("TYRE",                                style=th_center),
-                    html.Th("BEST LAP",                            style=th_center),
-                    html.Th("LEADER",                              style=th_center),
-                    html.Th("LAST LAP",                            style=th_center),
-                    html.Th("MINI SECTORS",                        style=th_center),
-                    html.Th("S1",                                  style={**th_center, "borderRight": "none"}),
-                    html.Th("S2",                                  style={**th_center, "borderRight": "none"}),
-                    html.Th("S3",                                  style=th_center),
-                    html.Th("BEST S1",                             style={**th_center, "borderRight": "none"}),
-                    html.Th("BEST S2",                             style={**th_center, "borderRight": "none"}),
-                    html.Th("BEST S3",                             style=th_center),
-                ])]),
-                html.Tbody(rows)
-            ]
-        )
+    return html.Div(className="f1-table-wrapper", children=[
+        html.Div(className="f1-live-badge", children=[
+            html.Div(className="f1-live-dot"),
+            html.Span("LIVE"),
+        ]),
+        html.Table(className="f1-table", children=[
+            html.Thead(html.Tr([
+                html.Th("PIT",          style={"width":"30px"}),
+                html.Th("P",            className="th-left", style={"width":"28px"}),
+                html.Th("DRIVER",       className="th-left", style={"minWidth":"170px"}),
+                html.Th("INTERVAL"),
+                html.Th("LEADER"),
+                html.Th("TYRE"),
+                html.Th("BEST LAP"),
+                html.Th("LAST LAP"),
+                html.Th("MINI SECTORS", style={"minWidth":"130px"}),
+                html.Th("S1", style={"borderRight":"none"}),
+                html.Th("S2", style={"borderRight":"none"}),
+                html.Th("S3"),
+            ])),
+            html.Tbody(rows),
+        ])
     ])
 
 @app.callback(
@@ -1031,53 +1257,46 @@ def update_live(selected_list, n_intervals, sess_old, active_tab):
     if not active_tab or active_tab != "live":
         raise dash.exceptions.PreventUpdate
 
-    # ── PRIORIDAD 1: feed live activo ────────────────────────────────────────
-    if live_timing.is_fresh(max_age=30):
-        gp_name  = (sess_old or {}).get("gp", "Live")
-        flag_src = f"https://flagcdn.com/{(sess_old or {}).get('flag','us')}.svg"
-        title    = f"{gp_name} · Live Timing {pd.Timestamp.now().year}"
+    # ── PRIORIDAD 1: feed live activo O con datos recientes (hasta 10 min) ──────
+    live_state = live_timing.get_state()
+    has_live_data = bool(live_state.get("drivers"))
+    if live_timing.is_fresh(max_age=600) and has_live_data:
+        now_year = pd.Timestamp.now().year
+        # Detectar sesión si no la tenemos o es del año incorrecto
+        sess_info = sess_old
+        if not sess_info or sess_info.get("year", 0) != now_year or sess_info.get("gp","") == "Japan":
+            try:
+                sessions = get_ff1_latest_session()
+                if sessions:
+                    s = sessions[0]
+                    sess_info = {
+                        "year":  s.get("_ff1_year", now_year),
+                        "gp":    s.get("meeting_name", ""),
+                        "type":  s.get("session_name", ""),
+                        "flag":  s.get("country_code", "us"),
+                    }
+            except Exception:
+                pass
+        gp_name  = (sess_info or {}).get("gp", "") or "Live"
+        stype    = (sess_info or {}).get("type", "") or "Timing"
+        flag_src = f"https://flagcdn.com/{(sess_info or {}).get('flag','us')}.svg"
+        title    = f"{gp_name} · {stype} {now_year}"
         return (
             create_live_table(selected_list),
             html.Div(),
-            sess_old or {"year": pd.Timestamp.now().year, "gp": "Live", "type": "Live"},
+            sess_info or sess_old or {"year": now_year, "gp": gp_name, "type": stype},
             title,
             flag_src
         )
 
-    # ── PRIORIDAD 2: si el feed existe pero aún sin datos, mostrar "conectando" ──
-    live_file_size = 0
-    try:
-        live_file_size = os.path.getsize(
-            os.path.join(os.path.dirname(__file__), "_live_feed.txt")
-        )
-    except Exception:
-        pass
-
-    # Si la sesión es del año actual y el feed existe (aunque vacío), mostrar conectando
-    # en lugar de caer a FastF1 (que puede tardar o no tener datos)
+    # ── PRIORIDAD 2: detectar sesión actual con cache (no spamear FF1 API) ──────
     now_year = pd.Timestamp.now().year
+    sess_info = get_current_session_info()   # cache 5 min
 
-    # Detectar sesión actual solo si no la tenemos en cache (para no saturar la API)
-    sess_info = sess_old
-    if not sess_info or sess_info.get("year", 0) != now_year:
-        # Solo detectar sesión si no lo hicimos recientemente
-        try:
-            sessions = get_ff1_latest_session()
-            if sessions:
-                s = sessions[0]
-                sess_info = {
-                    "year":  s.get("_ff1_year", now_year),
-                    "gp":    s.get("meeting_name", ""),
-                    "type":  s.get("session_name", ""),
-                    "flag":  s.get("country_code", "us"),
-                }
-        except Exception:
-            pass
-
-    year      = (sess_info or {}).get("year", now_year)
-    gp        = (sess_info or {}).get("gp", "")
-    stype     = (sess_info or {}).get("type", "")
-    flag_code = (sess_info or {}).get("flag", "us")
+    year      = sess_info.get("year", now_year)
+    gp        = sess_info.get("gp", "") or sess_info.get("_ff1_gp", "")
+    stype     = sess_info.get("type", "") or sess_info.get("_ff1_stype", "")
+    flag_code = sess_info.get("flag", "us")
     title     = f"{gp} · {stype} {year}" if gp else f"Live Timing {year}"
     flag_src  = f"https://flagcdn.com/{flag_code}.svg"
 
@@ -1092,17 +1311,13 @@ def update_live(selected_list, n_intervals, sess_old, active_tab):
             flag_src
         )
 
-    # ── PRIORIDAD 4: conectando al feed / cargando datos ────────────────────
-    _ensure_session_loading(year, gp, stype)
+    # ── PRIORIDAD 4: disparar carga en background + mostrar tabla estática ──────
+    if gp and stype:
+        _ensure_session_loading(year, gp, stype)
 
-    connecting_msg = html.Div([
-        html.Div("⏳ Conectando al feed en vivo…",
-                 style={"color": "#fff", "fontSize": "15px", "marginBottom": "8px", "fontWeight": "600"}),
-        html.Div("El timing aparecerá automáticamente en cuanto lleguen datos de F1.",
-                 style={"color": MUTED, "fontSize": "13px"}),
-    ], style={"padding": "80px 40px", "textAlign": "center"})
-
-    return (connecting_msg, html.Div(), sess_info or sess_old, title, flag_src)
+    # Mostrar tabla con nombres del mapa estático mientras llegan los datos reales
+    table = _create_placeholder_table(selected_list)
+    return (table, html.Div(), sess_info or sess_old, title, flag_src)
 
 # ── REPLAY LOGIC ────────────────────────────────────────────────────────────
 @app.callback(
