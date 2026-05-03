@@ -81,9 +81,36 @@ def _drv_default():
         "compound":"?","tyre_laps":0,"tyre_new":True,
         "in_pit": False, "pit_out": False,
     }
+def _apply_patch(base, patch):
+    """
+    Aplica un JSON Merge Patch (lista o dict) sobre base.
+    El feed de F1 puede enviar delta-updates como lista de dicts parciales.
+    """
+    if isinstance(patch, dict):
+        if not isinstance(base, dict):
+            return patch
+        result = dict(base)
+        for k, v in patch.items():
+            if v is None:
+                result.pop(k, None)
+            elif isinstance(v, (dict, list)) and isinstance(result.get(k), dict):
+                result[k] = _apply_patch(result[k], v)
+            else:
+                result[k] = v
+        return result
+    # Si es lista, intentar aplicar cada elemento como patch
+    if isinstance(patch, list):
+        for item in patch:
+            base = _apply_patch(base, item)
+        return base
+    return patch
+
 
 def _proc_timing_data(msg):
+    if not isinstance(msg, dict):
+        return  # JSON Patch list — ignorar (TimingData usa dicts)
     for drv, data in msg.get("Lines", {}).items():
+        if not isinstance(data, dict): continue
         d = _state["drivers"].setdefault(drv, _drv_default())
         if "Position" in data:
             d["position"] = str(data["Position"])
@@ -124,7 +151,10 @@ def _proc_timing_data(msg):
     _state["last_update"] = time.time()
 
 def _proc_timing_app(msg):
+    if not isinstance(msg, dict):
+        return
     for drv, data in msg.get("Lines", {}).items():
+        if not isinstance(data, dict): continue
         d = _state["drivers"].setdefault(drv, _drv_default())
         stints = data.get("Stints", {})
         if not stints: continue
@@ -139,6 +169,8 @@ def _proc_timing_app(msg):
         d["tyre_new"] = st.get("New","TRUE") in ("TRUE", True)
 
 def _proc_driver_list(msg):
+    if not isinstance(msg, dict):
+        return  # Delta patches de DriverList — la lista inicial ya fue procesada
     for drv, info in msg.items():
         if isinstance(info, dict):
             _state["driver_list"][drv] = {
