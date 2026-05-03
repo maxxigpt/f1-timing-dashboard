@@ -1482,16 +1482,24 @@ def update_live(selected_list, n_intervals, sess_old, active_tab):
     title     = f"{gp} · {stype} {year}" if gp else f"Live Timing {year}"
     flag_src  = f"https://flagcdn.com/{flag_code}.svg"
 
-    # ── PRIORIDAD 3: datos históricos en caché ───────────────────────────────
+    # ── PRIORIDAD 3: datos históricos en caché (SOLO sesiones completadas) ──────
     cache_key = f"{year}-{gp}-{stype}-False"
     if cache_key in _session_mem:
-        return (
-            create_table(year, gp, stype, selected_list),
-            html.Div(),
-            sess_info,
-            title,
-            flag_src
-        )
+        s = _session_mem[cache_key]
+        try:
+            has_results = s.results is not None and not s.results.empty
+        except Exception:
+            has_results = False
+        if has_results:
+            # Sesión terminada con datos reales → tabla histórica FastF1
+            return (
+                create_table(year, gp, stype, selected_list),
+                html.Div(),
+                sess_info,
+                title,
+                flag_src
+            )
+        # Sin resultados → sesión en curso o muy reciente → caer al placeholder
 
     # ── PRIORIDAD 4: disparar carga en background + mostrar tabla estática ──────
     if gp and stype:
