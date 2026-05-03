@@ -1267,15 +1267,11 @@ def update_live(selected_list, n_intervals, sess_old, active_tab):
     if not active_tab or active_tab != "live":
         raise dash.exceptions.PreventUpdate
 
-    # ── PRIORIDAD 1: feed live activo — solo si la sesión está ACTIVA en el feed ──
-    # F1 emite session_status="Active" únicamente durante una sesión real.
-    # Valores posibles: "Active", "Inactive", "Finished", "Aborted", "" (desconocido)
-    # Sin este check, el WebSocket recibe datos cacheados y los muestra como live.
+    # ── PRIORIDAD 1: feed live activo — datos recibidos en los últimos 60s ──────
+    # is_fresh(60) garantiza que el WebSocket está recibiendo datos reales ahora.
     live_state = live_timing.get_state()
     has_live_data = bool(live_state.get("drivers"))
-    session_status = live_state.get("session_status", "")
-    is_session_active = session_status in ("Active", "Started", "AbortedStart")
-    if live_timing.is_fresh(max_age=30) and has_live_data and is_session_active:
+    if live_timing.is_fresh(max_age=60) and has_live_data:
         now_year = pd.Timestamp.now().year
         # Detectar sesión si no la tenemos o es del año incorrecto
         sess_info = sess_old
