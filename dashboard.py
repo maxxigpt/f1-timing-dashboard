@@ -1,4 +1,4 @@
-import os, json, warnings, time, requests, threading
+import os, json, warnings, time, requests, threading, copy
 import dash
 from dash import dcc, html, Input, Output, State, callback_context
 import dash_bootstrap_components as dbc
@@ -367,6 +367,144 @@ app = dash.Dash(__name__, external_stylesheets=EXTERNAL_STYLESHEETS, suppress_ca
 server = app.server  # Expone el servidor Flask para gunicorn
 app.title = "F1 Timing Dashboard 2.0"
 live_timing.start()
+
+# ── OPENF1 LIVE POLLING (fallback cuando SignalR no funciona en Render) ────────
+_of1_live = {"drivers": {}, "driver_list": {}, "ts": 0, "session_key": None}
+_of1_live_lock = threading.Lock()
+
+def _fetch_of1_live():
+    """Obtiene datos en vivo de OpenF1 API y actualiza _of1_live."""
+    try:
+        # Sesión activa
+        sessions = of1_get("sessions", "session_key=latest", ttl=30)
+        if not sessions: return
+        sk = sessions[-1].get("session_key")
+        if not sk: return
+
+        drivers_raw  = of1_get("drivers",   f"session_key={sk}", ttl=300)
+        positions_raw= of1_get("position",  f"session_key={sk}", ttl=5)
+        intervals_raw= of1_get("intervals", f"session_key={sk}", ttl=5)
+        laps_raw     = of1_get("laps",      f"session_key={sk}", ttl=5)
+        stints_raw   = of1_get("stints",    f"session_key={sk}", ttl=10)
+
+        if not drivers_raw or not positions_raw: return
+
+        pos_latest = {}
+        for p in positions_raw:
+            pos_latest[str(p.get("driver_number",""))] = p
+
+        itv_latest = {}
+        for iv in intervals_raw:
+            itv_latest[str(iv.get("driver_number",""))] = iv
+
+        laps_by_drv = {}
+        for lap in laps_raw:
+            laps_by_drv.setdefault(str(lap.get("driver_number","")), []).append(lap)
+
+        stints_by_drv = {}
+        for s in stints_raw:
+            stints_by_drv.setdefault(str(s.get("driver_number","")), []).append(s)
+
+        driver_list = {}
+        for d in drivers_raw:
+            num = str(d.get("driver_number",""))
+            color = d.get("team_colour","888888") or "888888"
+            if not color.startswith("#"): color = "#" + color
+            driver_list[num] = {
+                "tla":       d.get("name_acronym", num),
+                "full_name": d.get("full_name", ""),
+                "team":      d.get("team_name", ""),
+                "team_color": color,
+                "number":    num,
+            }
+
+        drivers = {}
+        for d in drivers_raw:
+            num = str(d.get("driver_number",""))
+            pos_data   = pos_latest.get(num, {})
+            itv_data   = itv_latest.get(num, {})
+            drv_laps   = sorted(laps_by_drv.get(num, []), key=lambda x: x.get("lap_number",0))
+            drv_stints = stints_by_drv.get(num, [])
+
+            last_lap, best_lap = None, None
+            if drv_laps:
+                try: last_lap = float(drv_laps[-1].get("lap_duration") or 0) or None
+                except: pass
+                for lap in drv_laps:
+                    try:
+                        lt = float(lap.get("lap_duration") or 0)
+                        if lt and (best_lap is None or lt < best_lap): best_lap = lt
+                    except: pass
+
+            sectors = {i: {"value":"","secs":None,"pb":False,"ob":False,"segments":{}} for i in range(3)}
+            if drv_laps:
+                for si, key in enumerate(["duration_sector_1","duration_sector_2","duration_sector_3"]):
+                    try:
+                        sv = float(drv_laps[-1].get(key) or 0)
+                        if sv: sectors[si] = {"value":f"{sv:.3f}","secs":sv,"pb":False,"ob":False,"segments":{}}
+                    except: pass
+
+            def _fmt(v):
+                if not v: return ""
+                try:
+                    v = float(v)
+                    return f"+{v:.3f}" if v >= 0 else f"{v:.3f}"
+                except: return str(v)
+
+            gap = _fmt(itv_data.get("gap_to_leader"))
+            itv = _fmt(itv_data.get("interval"))
+
+            compound, tyre_laps = "?", 0
+            if drv_stints:
+                st = drv_stints[-1]
+                compound = str(st.get("compound","?")).upper()
+                ls = st.get("lap_start") or 0
+                le = st.get("lap_end") or 0
+                tyre_laps = max(0, (le - ls + 1) if le > ls else 0)
+
+            drivers[num] = {
+                "position":     str(pos_data.get("position","")),
+                "gap":          gap,
+                "interval":     itv,
+                "last_lap":     last_lap,
+                "last_lap_str": live_timing.fmt_time(last_lap) if last_lap else "",
+                "last_lap_pb":  False,
+                "last_lap_ob":  False,
+                "best_lap":     best_lap,
+                "best_lap_str":"",
+                "lap_number":   len(drv_laps),
+                "sectors":      sectors,
+                "compound":     compound,
+                "tyre_laps":    tyre_laps,
+                "tyre_new":     False,
+                "in_pit":       False,
+                "pit_out":      False,
+            }
+
+        if drivers:
+            with _of1_live_lock:
+                _of1_live["drivers"]     = drivers
+                _of1_live["driver_list"] = driver_list
+                _of1_live["session_key"] = sk
+                _of1_live["ts"]          = time.time()
+            print(f"[OF1 Poll] {len(drivers)} pilotos actualizados, session_key={sk}")
+    except Exception as e:
+        print(f"[OF1 Poll] Error: {e}")
+
+def _of1_poll_thread():
+    while True:
+        _fetch_of1_live()
+        time.sleep(10)
+
+def get_of1_live_state():
+    """Retorna el estado OpenF1 si tiene datos de los últimos 60s."""
+    with _of1_live_lock:
+        if _of1_live["drivers"] and (time.time() - _of1_live["ts"]) < 60:
+            return copy.deepcopy(_of1_live)
+    return None
+
+threading.Thread(target=_of1_poll_thread, daemon=True, name="of1-poll").start()
+print("[OF1 Poll] Hilo iniciado.")
 
 def _prewarm_session():
     """Pre-carga la sesión actual en background para que la primera vista sea rápida."""
@@ -1267,8 +1405,7 @@ def update_live(selected_list, n_intervals, sess_old, active_tab):
     if not active_tab or active_tab != "live":
         raise dash.exceptions.PreventUpdate
 
-    # ── PRIORIDAD 1: feed live activo — datos recibidos en los últimos 60s ──────
-    # is_fresh(60) garantiza que el WebSocket está recibiendo datos reales ahora.
+    # ── PRIORIDAD 1: SignalR WebSocket (feed nativo F1) ─────────────────────────
     live_state = live_timing.get_state()
     has_live_data = bool(live_state.get("drivers"))
     if live_timing.is_fresh(max_age=60) and has_live_data:
@@ -1296,6 +1433,40 @@ def update_live(selected_list, n_intervals, sess_old, active_tab):
             create_live_table(selected_list),
             html.Div(),
             sess_info or sess_old or {"year": now_year, "gp": gp_name, "type": stype},
+            title,
+            flag_src
+        )
+
+    # ── PRIORIDAD 1.5: OpenF1 API polling (fallback si SignalR no funciona) ─────
+    of1_state = get_of1_live_state()
+    if of1_state and of1_state.get("drivers"):
+        # Inyectar datos OF1 en live_timing para reutilizar create_live_table
+        with live_timing._lock:
+            live_timing._state["drivers"]     = of1_state["drivers"]
+            live_timing._state["driver_list"] = of1_state["driver_list"]
+            live_timing._state["connected"]   = True
+            live_timing._state["last_update"] = of1_state["ts"]
+        now_year = pd.Timestamp.now().year
+        sess_info = sess_old
+        try:
+            sessions_of1 = of1_get("sessions", "session_key=latest", ttl=60)
+            if sessions_of1:
+                s = sessions_of1[-1]
+                gp_name = s.get("meeting_name","") or s.get("circuit_short_name","") or "Live"
+                stype   = s.get("session_name","") or "Race"
+                flag_src = f"https://flagcdn.com/us.svg"
+                title    = f"{gp_name} · {stype} {now_year}"
+                sess_info = {"year": now_year, "gp": gp_name, "type": stype, "flag": "us"}
+        except Exception as e:
+            print(f"[OF1 sess] {e}")
+            gp_name  = (sess_old or {}).get("gp","Live")
+            stype    = (sess_old or {}).get("type","Race")
+            flag_src = "https://flagcdn.com/us.svg"
+            title    = f"{gp_name} · {stype} {now_year}"
+        return (
+            create_live_table(selected_list),
+            html.Div(),
+            sess_info or sess_old or {},
             title,
             flag_src
         )
