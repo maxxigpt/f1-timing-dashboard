@@ -4,3 +4,4 @@ pandas
 fastf1
 requests
 gunicorn
+websocket-client
