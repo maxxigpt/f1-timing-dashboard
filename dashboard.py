@@ -975,7 +975,7 @@ def _create_placeholder_table(selected_list):
         full_name = info["full_name"]
         team      = info["team"]
         tcolor    = TEAM_COLORS.get(team, "#555")
-        last_name = full_name.split(" ", 1)[-1] if full_name else ""
+        last_name = full_name.split()[-1] if full_name else ""
 
         is_cadillac  = (team == "Cadillac")
         cadillac_cls = " cadillac" if is_cadillac else ""
@@ -1098,7 +1098,7 @@ def create_live_table(selected_list):
         tcolor    = TEAM_COLORS.get(team, info.get("team_color","#555"))
         pos_int   = _safe_pos(drv_num, d.get("position", ""))
         pos_disp  = str(pos_int) if pos_int else "–"
-        last_name = full_name.split(" ", 1)[-1] if full_name else ""
+        last_name = full_name.split()[-1] if full_name else ""
         # Cadillac: clase CSS extra para identidad blanca
         is_cadillac  = (team == "Cadillac")
         cadillac_cls = " cadillac" if is_cadillac else ""
@@ -1181,9 +1181,18 @@ def create_live_table(selected_list):
         gap_el = html.Span("LEADER", className="f1-gap-leader") if pos_int == 1 else html.Span(gap, className="f1-gap-val")
 
         # Interval (distancia al piloto de delante)
-        itv_raw = d.get("interval","")
-        if itv_raw and not str(itv_raw).startswith("+") and pos_int != 1: itv_raw = f"+{itv_raw}"
-        itv_el  = html.Span("–" if not itv_raw else itv_raw, className="f1-interval-val")
+        # P1 siempre muestra "–"; para el resto, asegurar prefijo "+"
+        if pos_int == 1:
+            itv_el = html.Span("–", className="f1-interval-val")
+        else:
+            itv_raw = d.get("interval", "")
+            itv_str = str(itv_raw).strip()
+            # Filtrar valores no numéricos del feed ("LAP x", "")
+            if itv_str and itv_str[0].isdigit():
+                itv_str = f"+{itv_str}"
+            elif itv_str and not itv_str.startswith("+"):
+                itv_str = ""
+            itv_el = html.Span(itv_str or "–", className="f1-interval-val")
 
         # Logo de equipo local
         logo_data    = TEAM_LOGO_LOCAL.get(team)
@@ -1258,10 +1267,15 @@ def update_live(selected_list, n_intervals, sess_old, active_tab):
     if not active_tab or active_tab != "live":
         raise dash.exceptions.PreventUpdate
 
-    # ── PRIORIDAD 1: feed live activo O con datos recientes (hasta 10 min) ──────
+    # ── PRIORIDAD 1: feed live activo — solo si la sesión está ACTIVA en el feed ──
+    # F1 emite session_status="Active" únicamente durante una sesión real.
+    # Valores posibles: "Active", "Inactive", "Finished", "Aborted", "" (desconocido)
+    # Sin este check, el WebSocket recibe datos cacheados y los muestra como live.
     live_state = live_timing.get_state()
     has_live_data = bool(live_state.get("drivers"))
-    if live_timing.is_fresh(max_age=600) and has_live_data:
+    session_status = live_state.get("session_status", "")
+    is_session_active = session_status in ("Active", "Started", "AbortedStart")
+    if live_timing.is_fresh(max_age=30) and has_live_data and is_session_active:
         now_year = pd.Timestamp.now().year
         # Detectar sesión si no la tenemos o es del año incorrecto
         sess_info = sess_old
