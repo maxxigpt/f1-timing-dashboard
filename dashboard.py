@@ -1122,29 +1122,35 @@ def _create_placeholder_table(selected_list):
         logo_src     = logo_data[0] if logo_data else None
         logo_cls     = ("f1-team-logo " + logo_data[1]).strip() if logo_data else "f1-team-logo"
 
-        driver_cell = html.Div(className="f1-driver-cell", children=[
-            html.Div(className=f"f1-team-stripe{cadillac_cls}", style={"backgroundColor": tcolor}),
-            html.Span(num,       className=f"f1-num-badge{cadillac_cls}", style={"backgroundColor": tcolor}),
-            html.Span(tla,       className=f"f1-tla{cadillac_cls}",       style={"color": tcolor}),
-            html.Span(last_name, className="f1-lastname"),
-            html.Img(src=logo_src, className=logo_cls) if logo_src else None,
-        ])
+        driver_cell = html.Div(
+            style={"display":"flex","alignItems":"center","gap":"0","padding":"0","height":"100%"},
+            children=[
+                html.Div("–", className="f1-pos-embed",
+                         style={"backgroundColor": "#1a1f2b"}),
+                html.Img(src=logo_src, className=logo_cls) if logo_src
+                    else html.Div(style={"width":"26px","flexShrink":"0"}),
+                html.Span(tla, className=f"f1-tla{cadillac_cls}",
+                          style={"color": tcolor, "marginLeft":"6px"}),
+            ]
+        )
 
         rows.append(html.Tr(
             id={'type':'driver-row','index':tla},
             className="f1-table-row",
             children=[
                 html.Td(None, className="f1-pit-cell"),
-                html.Td("–", className="f1-pos", style={"backgroundColor": "transparent"}),
-                html.Td(driver_cell),
+                html.Td(driver_cell, style={"padding":"0"}),
                 html.Td(html.Span("–", className="f1-interval-val")),
-                html.Td(html.Span("–", className="f1-gap-val")),
                 html.Td(html.Div(className="f1-tyre-cell", children=[
-                    html.Span("?", className="f1-tyre-letter", style={"color":"#555"}),
+                    html.Span("(?)", className="f1-tyre-letter", style={"color":"#555"}),
                 ])),
-                html.Td(html.Span("–:–––––", className="f1-time t-muted")),
-                html.Td(html.Span("–:–––––", className="f1-time t-muted")),
+                html.Td(html.Span("–", className="f1-time t-muted")),
+                html.Td(html.Span("–", className="f1-gap-val")),
+                html.Td(html.Span("–", className="f1-time t-muted")),
                 html.Td(html.Div(_empty_segs(), className="f1-minisectors")),
+                html.Td(html.Span("", className="f1-sector t-muted"), style={"borderRight":"none"}),
+                html.Td(html.Span("", className="f1-sector t-muted"), style={"borderRight":"none"}),
+                html.Td(html.Span("", className="f1-sector t-muted")),
                 html.Td(html.Span("", className="f1-sector t-muted"), style={"borderRight":"none"}),
                 html.Td(html.Span("", className="f1-sector t-muted"), style={"borderRight":"none"}),
                 html.Td(html.Span("", className="f1-sector t-muted")),
@@ -1159,17 +1165,15 @@ def _create_placeholder_table(selected_list):
         html.Table(className="f1-table", children=[
             html.Thead(html.Tr([
                 html.Th("PIT",          style={"width":"34px",  "minWidth":"34px"}),
-                html.Th("P",            className="th-left", style={"width":"28px", "minWidth":"28px"}),
                 html.Th("DRIVER",       className="th-left", style={"width":"190px","minWidth":"190px"}),
                 html.Th("INTERVAL",     style={"width":"80px",  "minWidth":"80px"}),
-                html.Th("LEADER",       style={"width":"80px",  "minWidth":"80px"}),
                 html.Th("TYRE",         style={"width":"56px",  "minWidth":"56px"}),
                 html.Th("BEST LAP",     style={"width":"82px",  "minWidth":"82px"}),
+                html.Th("LEADER",       style={"width":"80px",  "minWidth":"80px"}),
                 html.Th("LAST LAP",     style={"width":"82px",  "minWidth":"82px"}),
                 html.Th("MINI SECTORS", style={"width":"200px", "minWidth":"200px"}),
-                html.Th("S1", style={"borderRight":"none", "width":"58px"}),
-                html.Th("S2", style={"borderRight":"none", "width":"58px"}),
-                html.Th("S3",           style={"width":"58px"}),
+                html.Th("LAST S",       colSpan=3, style={"width":"174px","minWidth":"174px"}),
+                html.Th("BEST S",       colSpan=3, style={"width":"174px","minWidth":"174px"}),
             ])),
             html.Tbody(rows),
         ])
@@ -1248,25 +1252,26 @@ def create_live_table(selected_list):
         elif len(selected_list) > 1 and tla == selected_list[1]:
             row_style = {"backgroundColor":"rgba(255,60,60,0.10)"}
 
-        # Tyre
+        # ── Tyre: formato "31 (H)" ──────────────────────────────────────────
         raw_c      = d.get("compound","?")
         comp_abbr  = live_timing.COMPOUND_ABBR.get(raw_c, "?")
         comp_color = live_timing.COMPOUND_COLOR.get(raw_c, "#888")
         tyre_laps  = d.get("tyre_laps", 0)
         tyre_cell  = html.Div(className="f1-tyre-cell", children=[
-            html.Span(comp_abbr, className="f1-tyre-letter", style={"color": comp_color}),
-            html.Span(f"+{tyre_laps}" if tyre_laps else "", className="f1-tyre-laps"),
+            html.Span(f"{tyre_laps} " if tyre_laps else "",
+                      style={"color":"#9aa0b0","fontFamily":"var(--font-mono)","fontSize":"0.78rem"}),
+            html.Span(f"({comp_abbr})", className="f1-tyre-letter", style={"color": comp_color}),
         ])
 
-        # Tiempos
+        # ── Tiempos ──────────────────────────────────────────────────────────
         bl    = d.get("best_lap")
         ll    = d.get("last_lap")
         ll_ob = d.get("last_lap_ob", False)
         ll_pb = d.get("last_lap_pb", False)
         bl_is_ob = bl and ob_lap and abs(bl - ob_lap) < 0.001
 
-        bl_cls = "f1-time updated " + ("t-purple" if bl_is_ob else "t-white" if bl else "t-muted")
-        ll_cls = "f1-time updated " + ("t-purple" if ll_ob else "t-green" if ll_pb else "t-muted" if not ll else "")
+        bl_cls = "f1-time " + ("t-purple" if bl_is_ob else "t-white" if bl else "t-muted")
+        ll_cls = "f1-time " + ("t-purple" if ll_ob else "t-pb-bg" if ll_pb else "t-muted" if not ll else "t-white")
 
         def sec_cls(secs, si, is_pb, is_ob):
             if not secs: return "f1-sector t-muted"
@@ -1276,7 +1281,7 @@ def create_live_table(selected_list):
 
         sectors = d.get("sectors", {})
 
-        # Sector cells
+        # ── Last sector cells ────────────────────────────────────────────────
         ls_cells = []
         for si in range(3):
             sec  = sectors.get(si, {})
@@ -1284,13 +1289,24 @@ def create_live_table(selected_list):
             sc   = sec_cls(sec.get("secs"), si, sec.get("pb",False), sec.get("ob",False))
             br   = {"borderRight":"none"} if si < 2 else {}
             bg   = {"backgroundColor":"rgba(177,93,255,0.08)"} if sec.get("ob") else {}
-            ls_cells.append(html.Td(
-                html.Span(sval, className=sc),
-                style={**br, **bg}
-            ))
+            ls_cells.append(html.Td(html.Span(sval, className=sc), style={**br, **bg}))
 
-        # Mini sectores con CSS classes
-        SEG_COUNT = [9, 9, 8]  # S1=9, S2=9, S3=8
+        # ── Best sector cells (TimingStats) ──────────────────────────────────
+        bs_data = d.get("best_sectors", {})
+        bs_cells = []
+        for si in range(3):
+            bs   = bs_data.get(si, {})
+            bval = bs.get("value", "")
+            bob  = bs.get("ob", False)
+            bsecs = bs.get("secs")
+            is_ob_overall = bob or (bsecs and ob_s[si] and abs(bsecs - ob_s[si]) < 0.001)
+            sc = "f1-sector t-purple" if (is_ob_overall and bval) else ("f1-sector t-white" if bval else "f1-sector t-muted")
+            bg = {"backgroundColor":"rgba(177,93,255,0.08)"} if is_ob_overall and bval else {}
+            br = {"borderRight":"none"} if si < 2 else {}
+            bs_cells.append(html.Td(html.Span(bval, className=sc), style={**br, **bg}))
+
+        # ── Mini sectores ────────────────────────────────────────────────────
+        SEG_COUNT = [9, 9, 8]
         mini_segs = []
         for si in range(3):
             if si > 0:
@@ -1303,7 +1319,7 @@ def create_live_table(selected_list):
             else:
                 mini_segs.extend([html.Div(className="f1-seg") for _ in range(SEG_COUNT[si])])
 
-        # PIT status
+        # ── PIT status ───────────────────────────────────────────────────────
         in_pit  = d.get("in_pit",  False)
         pit_out = d.get("pit_out", False)
         if in_pit:
@@ -1313,38 +1329,41 @@ def create_live_table(selected_list):
         else:
             pit_el = None
 
-        # Gap al líder (LEADER)
+        # ── LEADER (gap al primero) ───────────────────────────────────────
         gap = d.get("gap","")
         if gap and not str(gap).startswith("+") and pos_int != 1: gap = f"+{gap}"
-        gap_el = html.Span("LEADER", className="f1-gap-leader") if pos_int == 1 else html.Span(gap, className="f1-gap-val")
+        gap_el = html.Span("Leader", className="f1-gap-leader") if pos_int == 1 \
+                 else html.Span(gap or "–", className="f1-gap-val")
 
-        # Interval (distancia al piloto de delante)
-        # P1 siempre muestra "–"; para el resto, asegurar prefijo "+"
+        # ── INTERVAL (gap al piloto de delante) ──────────────────────────
         if pos_int == 1:
-            itv_el = html.Span("–", className="f1-interval-val")
+            itv_el = html.Span("Interval", className="f1-itv-label")
         else:
             itv_raw = d.get("interval", "")
             itv_str = str(itv_raw).strip()
-            # Filtrar valores no numéricos del feed ("LAP x", "")
             if itv_str and itv_str[0].isdigit():
                 itv_str = f"+{itv_str}"
             elif itv_str and not itv_str.startswith("+"):
                 itv_str = ""
-            itv_el = html.Span(itv_str or "–", className="f1-interval-val")
+            itv_el = html.Span(itv_str, className="f1-itv-gap") if itv_str \
+                     else html.Span("–", className="f1-interval-val")
 
-        # Logo de equipo local
-        logo_data    = TEAM_LOGO_LOCAL.get(team)
-        logo_src     = logo_data[0] if logo_data else None
-        logo_cls     = ("f1-team-logo " + logo_data[1]).strip() if logo_data else "f1-team-logo"
+        # ── Logo + driver cell (pos embebida, logo, TLA) ─────────────────
+        logo_data = TEAM_LOGO_LOCAL.get(team)
+        logo_src  = logo_data[0] if logo_data else None
+        logo_cls  = ("f1-team-logo " + logo_data[1]).strip() if logo_data else "f1-team-logo"
 
-        # Driver cell — las clases cadillac sobrescriben el color inline vía CSS
-        driver_cell = html.Div(className="f1-driver-cell", children=[
-            html.Div(className=f"f1-team-stripe{cadillac_cls}", style={"backgroundColor": tcolor}),
-            html.Span(drv_num, className=f"f1-num-badge{cadillac_cls}", style={"backgroundColor": tcolor}),
-            html.Span(tla,     className=f"f1-tla{cadillac_cls}",       style={"color": tcolor}),
-            html.Span(last_name, className="f1-lastname"),
-            html.Img(src=logo_src, className=logo_cls) if logo_src else None,
-        ])
+        driver_cell = html.Div(
+            style={"display":"flex","alignItems":"center","gap":"0","padding":"0","height":"100%"},
+            children=[
+                html.Div(pos_disp, className="f1-pos-embed",
+                         style={"backgroundColor": tcolor if pos_int else "#1a1f2b"}),
+                html.Img(src=logo_src, className=logo_cls) if logo_src
+                    else html.Div(style={"width":"26px","flexShrink":"0"}),
+                html.Span(tla, className=f"f1-tla{cadillac_cls}",
+                          style={"color": tcolor, "marginLeft":"6px"}),
+            ]
+        )
 
         rows.append(html.Tr(
             id={'type':'driver-row','index':tla},
@@ -1352,16 +1371,16 @@ def create_live_table(selected_list):
             style=row_style,
             children=[
                 html.Td(pit_el, className="f1-pit-cell"),
-                html.Td(pos_disp, className="f1-pos", style={"backgroundColor": tcolor if pos_int else "transparent"}),
-                html.Td(driver_cell),
+                html.Td(driver_cell, style={"padding":"0"}),
                 html.Td(itv_el),
-                html.Td(gap_el),
                 html.Td(tyre_cell),
                 html.Td(html.Span(live_timing.fmt_time(bl) or "–", className=bl_cls,
                                   style={"backgroundColor":"rgba(177,93,255,0.10)"} if bl_is_ob else {})),
+                html.Td(gap_el),
                 html.Td(html.Span(live_timing.fmt_time(ll) or "–", className=ll_cls)),
                 html.Td(html.Div(mini_segs, className="f1-minisectors")),
                 *ls_cells,
+                *bs_cells,
             ]
         ))
 
@@ -1373,17 +1392,15 @@ def create_live_table(selected_list):
         html.Table(className="f1-table", children=[
             html.Thead(html.Tr([
                 html.Th("PIT",          style={"width":"34px",  "minWidth":"34px"}),
-                html.Th("P",            className="th-left", style={"width":"28px", "minWidth":"28px"}),
                 html.Th("DRIVER",       className="th-left", style={"width":"190px","minWidth":"190px"}),
                 html.Th("INTERVAL",     style={"width":"80px",  "minWidth":"80px"}),
-                html.Th("LEADER",       style={"width":"80px",  "minWidth":"80px"}),
                 html.Th("TYRE",         style={"width":"56px",  "minWidth":"56px"}),
                 html.Th("BEST LAP",     style={"width":"82px",  "minWidth":"82px"}),
+                html.Th("LEADER",       style={"width":"80px",  "minWidth":"80px"}),
                 html.Th("LAST LAP",     style={"width":"82px",  "minWidth":"82px"}),
                 html.Th("MINI SECTORS", style={"width":"200px", "minWidth":"200px"}),
-                html.Th("S1", style={"borderRight":"none", "width":"58px"}),
-                html.Th("S2", style={"borderRight":"none", "width":"58px"}),
-                html.Th("S3",           style={"width":"58px"}),
+                html.Th("LAST S",       colSpan=3, style={"width":"174px","minWidth":"174px"}),
+                html.Th("BEST S",       colSpan=3, style={"width":"174px","minWidth":"174px"}),
             ])),
             html.Tbody(rows),
         ])
@@ -1408,7 +1425,9 @@ def update_live(selected_list, n_intervals, sess_old, active_tab):
     # ── PRIORIDAD 1: SignalR WebSocket (feed nativo F1) ─────────────────────────
     live_state = live_timing.get_state()
     has_live_data = bool(live_state.get("drivers"))
-    if live_timing.is_fresh(max_age=60) and has_live_data:
+    session_status = live_state.get("session_status", "")
+    is_session_active = session_status in ("Active", "Started", "AbortedStart")
+    if live_timing.is_fresh(max_age=30) and has_live_data and is_session_active:
         now_year = pd.Timestamp.now().year
         # Detectar sesión si no la tenemos o es del año incorrecto
         sess_info = sess_old

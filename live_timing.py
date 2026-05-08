@@ -78,6 +78,11 @@ def _drv_default():
             1: {"value":"","secs":None,"pb":False,"ob":False,"segments":{}},
             2: {"value":"","secs":None,"pb":False,"ob":False,"segments":{}},
         },
+        "best_sectors": {
+            0: {"value":"","secs":None,"ob":False},
+            1: {"value":"","secs":None,"ob":False},
+            2: {"value":"","secs":None,"ob":False},
+        },
         "compound":"?","tyre_laps":0,"tyre_new":True,
         "in_pit": False, "pit_out": False,
     }
@@ -181,9 +186,29 @@ def _proc_driver_list(msg):
                 "number":     str(info.get("RacingNumber", drv)),
             }
 
+def _proc_timing_stats(msg):
+    """TimingStats: best sector times per driver (Position 1 = overall best)."""
+    if not isinstance(msg, dict):
+        return
+    for drv, data in msg.get("Lines", {}).items():
+        if not isinstance(data, dict): continue
+        d = _state["drivers"].setdefault(drv, _drv_default())
+        best_secs = data.get("BestSectors", [])
+        items = enumerate(best_secs[:3]) if isinstance(best_secs, list) else (
+            ((int(k), v) for k, v in best_secs.items()) if isinstance(best_secs, dict) else []
+        )
+        for si, sec in items:
+            if not isinstance(sec, dict) or not sec.get("Value"): continue
+            bs = d["best_sectors"].setdefault(si, {"value":"","secs":None,"ob":False})
+            bs["value"] = sec["Value"]
+            bs["secs"]  = parse_time(sec["Value"])
+            bs["ob"]    = (str(sec.get("Position","")) == "1")
+    _state["last_update"] = time.time()
+
 PROCESSORS = {
     "TimingData":    _proc_timing_data,
     "TimingAppData": _proc_timing_app,
+    "TimingStats":   _proc_timing_stats,
     "DriverList":    _proc_driver_list,
     "SessionStatus": lambda m: _state.update({"session_status": m.get("Status","")}),
 }

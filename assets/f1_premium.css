@@ -238,6 +238,51 @@ body { background: var(--bg-base); color: var(--text-primary); margin: 0; }
 .f1-sector.t-yellow { color: var(--yellow); }
 .f1-sector.t-muted  { color: var(--text-secondary); }
 
+/* ── POSITION BADGE (embebido en celda DRIVER) ───────── */
+.f1-pos-embed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  width: 30px;
+  padding: 0 4px;
+  font-size: 0.88rem;
+  font-weight: 900;
+  color: #fff;
+  flex-shrink: 0;
+  align-self: stretch;
+  border-radius: 2px;
+  margin-right: 8px;
+}
+
+/* ── INTERVAL: etiqueta líder ────────────────────────── */
+.f1-itv-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.06em;
+  font-family: var(--font-ui);
+}
+
+/* ── INTERVAL: gap con fondo verde ──────────────────── */
+.f1-itv-gap {
+  font-family: var(--font-mono);
+  font-size: 0.80rem;
+  font-weight: 700;
+  color: #b8ffb8;
+  background: rgba(0, 180, 60, 0.22);
+  padding: 2px 5px;
+  border-radius: 3px;
+}
+
+/* ── LAST LAP personal best (fondo verde) ────────────── */
+.f1-time.t-pb-bg {
+  background: rgba(0, 210, 30, 0.22);
+  border-radius: 3px;
+  padding: 1px 4px;
+  color: var(--green);
+}
+
 /* ── BADGE LIVE ──────────────────────────────────────── */
 .f1-live-badge {
   display: flex;
