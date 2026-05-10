@@ -1330,8 +1330,10 @@ def create_live_table(selected_list):
             pit_el = None
 
         # ── LEADER (gap al primero) ───────────────────────────────────────
-        gap = d.get("gap","")
-        if gap and not str(gap).startswith("+") and pos_int != 1: gap = f"+{gap}"
+        gap = str(d.get("gap","")).strip()
+        is_lapped_gap = gap.upper().endswith("L")
+        if gap and not is_lapped_gap and not gap.startswith("+") and pos_int != 1:
+            gap = f"+{gap}"
         gap_el = html.Span("Leader", className="f1-gap-leader") if pos_int == 1 \
                  else html.Span(gap or "–", className="f1-gap-val")
 
@@ -1341,12 +1343,17 @@ def create_live_table(selected_list):
         else:
             itv_raw = d.get("interval", "")
             itv_str = str(itv_raw).strip()
-            if itv_str and itv_str[0].isdigit():
+            is_lapped_itv = itv_str.upper().endswith("L")
+            if is_lapped_itv:
+                # Lapped: show "1L", "2L" with muted style, no green bg
+                itv_el = html.Span(itv_str, className="f1-interval-val")
+            elif itv_str and itv_str[0].isdigit():
                 itv_str = f"+{itv_str}"
-            elif itv_str and not itv_str.startswith("+"):
-                itv_str = ""
-            itv_el = html.Span(itv_str, className="f1-itv-gap") if itv_str \
-                     else html.Span("–", className="f1-interval-val")
+                itv_el = html.Span(itv_str, className="f1-itv-gap")
+            elif itv_str and itv_str.startswith("+"):
+                itv_el = html.Span(itv_str, className="f1-itv-gap")
+            else:
+                itv_el = html.Span("–", className="f1-interval-val")
 
         # ── Logo + driver cell (pos embebida, logo, TLA) ─────────────────
         logo_data = TEAM_LOGO_LOCAL.get(team)
